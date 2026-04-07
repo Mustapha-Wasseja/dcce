@@ -1,0 +1,42 @@
+Package: dcce
+Title: Dynamic Common Correlated Effects Estimation for Panel Data
+Version: 0.1.0
+Authors@R: person("Mustapha", "Wasseja", role = c("aut", "cre"),
+           email = "mwasseja@worldbank.org")
+Description: Estimates heterogeneous coefficient models for large panels
+    with cross-sectional dependence. Implements the Mean Group (MG),
+    Common Correlated Effects (CCE), and Dynamic CCE (DCCE) estimators
+    of Pesaran (2006) and Chudik and Pesaran (2015), the regularized CCE
+    of Juodis (2022), long-run estimators including CS-DL, CS-ARDL, and
+    PMG (Chudik et al. 2016; Shin et al. 1999), the CD cross-sectional
+    dependence test suite of Pesaran (2021), Juodis and Reese (2022), and
+    Fan et al. (2015), and the exponent of cross-sectional dependence
+    from Bailey et al. (2016, 2019). Information criteria for CSA
+    selection (Margaritella and Westerlund 2023) and the rank condition
+    classifier (De Vos et al. 2024) are also included.
+License: GPL (>= 3)
+Encoding: UTF-8
+LazyData: true
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.3
+Depends:
+    R (>= 4.1.0)
+Imports:
+    stats,
+    Matrix,
+    collapse (>= 2.0.0),
+    sandwich,
+    generics,
+    rlang (>= 1.1.0),
+    cli (>= 3.0.0),
+    tibble
+Suggests:
+    broom,
+    ggplot2,
+    lifecycle,
+    plm,
+    testthat (>= 3.0.0),
+    knitr,
+    rmarkdown
+VignetteBuilder: knitr
+Config/testthat/edition: 3

@@ -1,0 +1,725 @@
+---
+title: "Introduction to the dcce Package: DCCE Estimation for Panel Data"
+author: "Mustapha Wasseja"
+date: "`r Sys.Date()`"
+output:
+  rmarkdown::html_vignette:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+vignette: >
+  %\VignetteIndexEntry{Introduction to the dcce Package: DCCE Estimation for Panel Data}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+bibliography: references.bib
+link-citations: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  collapse  = TRUE,
+  comment   = "#>",
+  fig.width = 7,
+  fig.height = 4.5,
+  out.width = "100%"
+)
+```
+
+# Introduction
+
+Macro-panel datasets---large panels of countries, regions, or industries observed over many
+time periods---are increasingly central to empirical economic research. A pervasive
+feature of such panels is **cross-sectional dependence (CSD)**: the residuals of unit $i$
+are correlated with the residuals of unit $j$ even after controlling for observable
+explanatory variables. Ignoring CSD causes standard panel estimators to produce
+inconsistent estimates and badly sized tests.
+
+The `dcce` package implements the family of **Common Correlated Effects (CCE)**
+estimators introduced by @pesaran2006estimation and extended to dynamic panels by
+@chudik2015common. These estimators filter out unobserved common factors---the
+source of CSD---by augmenting each unit's regression with cross-sectional averages
+(CSAs) of the dependent variable and the regressors. The package further implements
+long-run estimators (CS-ARDL, CS-DL), an extensive CD test suite, the exponent of
+cross-sectional dependence, and information criteria for CSA lag selection.
+
+**Key features:**
+
+- Mean Group (MG), CCE-MG, Dynamic CCE (DCCE), Regularized CCE (rCCE)
+- Long-run estimators: CS-ARDL (@chudik2016long), CS-DL, Pooled Mean Group (PMG, @shin1999ardl)
+- CD test suite: Pesaran CD (@pesaran2015testing), CDw (@juodis2022), PEA (@fan2015power), CD* (@pesaran2021cdstar)
+- Exponent of cross-sectional dependence (@bailey2016exponent, @bailey2019exponent)
+- Information criteria for CSA selection (@margaritella2023information)
+- Rank condition classifier (@devos2024rank)
+- Cross-section and wild bootstrap inference
+- `broom`-compatible `tidy()` and `glance()` methods
+
+```{r load-package}
+library(dcce)
+```
+
+# The Problem: Cross-Sectional Dependence
+
+## What is cross-sectional dependence?
+
+In a panel with $N$ units and $T$ time periods, suppose the data generating process is:
+
+$$
+y_{it} = \alpha_i + \boldsymbol{\beta}_i' \mathbf{x}_{it} + \varepsilon_{it},
+$$
+
+where $\varepsilon_{it}$ is the error term. Standard panel estimators assume
+$\mathbb{E}[\varepsilon_{it}\varepsilon_{jt}] = 0$ for $i \neq j$. In macro
+panels, this assumption is routinely violated because units share common shocks
+(global business cycles, oil price shocks, financial crises) and are connected via
+trade, capital flows, and technology spillovers.
+
+## Consequences of ignoring CSD
+
+When the errors contain unobserved common factors,
+$$
+\varepsilon_{it} = \boldsymbol{\lambda}_i' \mathbf{f}_t + u_{it},
+$$
+standard fixed-effects and first-differencing estimators are inconsistent if the
+regressors are also driven by $\mathbf{f}_t$---a situation called *strong* CSD. In
+that case, $\mathbf{x}_{it}$ and $\varepsilon_{it}$ share a common component
+($\boldsymbol{\lambda}_i' \mathbf{f}_t$), inducing endogeneity. @pesaran2006estimation
+shows the resulting bias can be substantial.
+
+## Testing for CSD: the `pcd_test()` function
+
+Before estimating, we should test for CSD. The Pesaran [-@pesaran2015testing] CD
+statistic is the benchmark:
+
+$$
+\text{CD} = \sqrt{\frac{2T}{N(N-1)}} \sum_{i=1}^{N-1} \sum_{j=i+1}^{N}
+             \sqrt{T_{ij}}\, \hat{\rho}_{ij} \xrightarrow{d} \mathcal{N}(0,1),
+$$
+
+where $\hat{\rho}_{ij}$ is the sample correlation of the residuals of units $i$
+and $j$. Under the null of no CSD, $\text{CD} \to \mathcal{N}(0,1)$ as
+$N, T \to \infty$.
+
+We illustrate with the `pwt8` dataset: 93 countries, 1960--2007, adapted from
+@ditzen2018estimating.
+
+```{r pwt8-load}
+data(pwt8, package = "dcce")
+str(pwt8)
+```
+
+Run a naive pooled OLS of GDP growth on factor inputs, ignoring CSD:
+
+```{r cd-ols}
+# Pooled OLS on complete cases
+pwt_cc <- na.omit(pwt8[, c("country", "year", "d_log_rgdpo",
+                             "log_hc", "log_ck", "log_ngd")])
+fit_ols <- lm(d_log_rgdpo ~ log_hc + log_ck + log_ngd, data = pwt_cc)
+
+# CD test on OLS residuals
+cd_ols <- pcd_test(
+  residuals(fit_ols), data = pwt_cc,
+  unit_index = "country", time_index = "year",
+  test = "pesaran"
+)
+print(cd_ols)
+```
+
+The CD statistic is far above the critical value ($\approx 1.96$), decisively
+rejecting the null of no cross-sectional dependence. Ignoring this leads to
+spurious inference.
+
+# The Model: Heterogeneous Panels with Common Factors
+
+## The general DGP
+
+`dcce` works with the **heterogeneous panel model** with unobserved common factors:
+
+$$
+y_{it} = \alpha_i + \boldsymbol{\beta}_i' \mathbf{x}_{it} + \boldsymbol{\lambda}_i' \mathbf{f}_t + u_{it},
+\quad i = 1,\ldots,N, \quad t = 1,\ldots,T,
+$$
+
+where:
+
+- $\boldsymbol{\beta}_i$ are **unit-specific** slope coefficients (heterogeneous);
+- $\mathbf{f}_t$ is a $(m \times 1)$ vector of **unobserved common factors**;
+- $\boldsymbol{\lambda}_i$ are unit-specific factor loadings;
+- $u_{it}$ is an idiosyncratic error with $\mathbb{E}[u_{it} u_{jt}] = 0$ for $i \neq j$.
+
+The regressors follow:
+$$
+\mathbf{x}_{it} = \mathbf{A}_i' \mathbf{g}_t + \boldsymbol{\Gamma}_i' \mathbf{f}_t + \mathbf{v}_{it},
+$$
+so the common factors $\mathbf{f}_t$ drive both $y_{it}$ and $\mathbf{x}_{it}$,
+inducing CSD and endogeneity.
+
+## The CCE approach
+
+@pesaran2006estimation shows that the unobserved $\mathbf{f}_t$ can be
+asymptotically spanned by the cross-sectional averages:
+
+$$
+\bar{y}_t = N^{-1}\sum_i y_{it}, \quad
+\bar{\mathbf{x}}_t = N^{-1}\sum_i \mathbf{x}_{it}.
+$$
+
+These **CSAs** are observable proxies for the common factors. Augmenting each
+unit's regression with the CSAs (and their lags, for dynamic panels) removes the
+common factor component and restores consistency.
+
+## Dynamic extension (DCCE)
+
+For dynamic panels where $y_{i,t-1}$ appears as a regressor, @chudik2015common
+show that the CCE estimator requires CSA lags to remain consistent. The recommended
+number of lags is $p_T = \lfloor T^{1/3} \rfloor$ (roughly 3 for $T \approx 48$).
+This gives the **DCCE** estimator.
+
+# Estimators
+
+## Mean Group (MG)
+
+The **Mean Group** estimator of @pesaran1995estimating runs OLS separately for each
+unit $i$:
+
+$$
+\hat{\boldsymbol{\beta}}_i^{\text{OLS}} = (\mathbf{X}_i' \mathbf{X}_i)^{-1} \mathbf{X}_i' \mathbf{y}_i,
+$$
+
+and averages:
+
+$$
+\hat{\boldsymbol{\beta}}^{\text{MG}} = N^{-1} \sum_{i=1}^N \hat{\boldsymbol{\beta}}_i.
+$$
+
+MG is consistent for $N, T \to \infty$ under heterogeneous slopes, but inconsistent
+when CSD is present via common factors. It serves as a useful benchmark.
+
+```{r mg-pwt8}
+fit_mg <- dcce(
+  data            = pwt8,
+  unit_index      = "country",
+  time_index      = "year",
+  formula         = d_log_rgdpo ~ L(log_rgdpo, 1) + log_hc + log_ck + log_ngd,
+  model           = "mg",
+  cross_section_vars = NULL
+)
+print(fit_mg)
+```
+
+The `L(log_rgdpo, 1)` term is the first lag of log GDP---its MG coefficient is
+$({\hat\rho} - 1)$, so a negative value indicates mean-reverting dynamics.
+
+## CCE Mean Group (CCE-MG)
+
+The **CCE-MG** estimator augments each unit's regression with contemporaneous CSAs:
+
+$$
+y_{it} = \alpha_i + \boldsymbol{\beta}_i' \mathbf{x}_{it}
+          + \boldsymbol{\delta}_i' \bar{\mathbf{z}}_t + u_{it},
+$$
+
+where $\bar{\mathbf{z}}_t = (\bar{y}_t, \bar{\mathbf{x}}_t')'$. The coefficients
+on the CSAs absorb the unobserved factors; the structural parameters
+$\hat{\boldsymbol{\beta}}_i$ are then averaged over units.
+
+@pesaran2006estimation establishes consistency and asymptotic normality of the
+CCE-MG estimator under mild conditions.
+
+```{r cce-pwt8}
+fit_cce <- dcce(
+  data               = pwt8,
+  unit_index         = "country",
+  time_index         = "year",
+  formula            = d_log_rgdpo ~ L(log_rgdpo, 1) + log_hc + log_ck + log_ngd,
+  model              = "cce",
+  cross_section_vars = ~ log_rgdpo + log_hc + log_ck + log_ngd,
+  cross_section_lags = 0
+)
+print(fit_cce)
+```
+
+Comparing MG and CCE-MG shows the effect of correcting for CSD: the coefficients
+shift, reflecting the removal of common-factor-driven bias.
+
+## Dynamic CCE (DCCE)
+
+When the lagged dependent variable is included, @chudik2015common require CSA lags
+to achieve asymptotically unbiased estimates. The DCCE estimator augments each
+unit's regression with $\bar{\mathbf{z}}_t, \bar{\mathbf{z}}_{t-1}, \ldots,
+\bar{\mathbf{z}}_{t-p_T}$.
+
+```{r dcce-pwt8}
+fit_dcce <- dcce(
+  data               = pwt8,
+  unit_index         = "country",
+  time_index         = "year",
+  formula            = d_log_rgdpo ~ L(log_rgdpo, 1) + log_hc + log_ck + log_ngd,
+  model              = "dcce",
+  cross_section_vars = ~ log_rgdpo + log_hc + log_ck + log_ngd,
+  cross_section_lags = 3
+)
+print(fit_dcce)
+```
+
+The coefficient on `L(log_rgdpo, 1)` is the speed of adjustment in the error
+correction framework. A value of approximately $-0.6$ implies $\hat\rho \approx 0.4$,
+consistent with mean-reverting dynamics in log GDP.
+
+### Verify that DCCE removes CSD
+
+A key diagnostic is to apply the CD test to the DCCE residuals. If the estimator
+has successfully absorbed the common factors, the residuals should no longer
+exhibit significant CSD:
+
+```{r dcce-cd-test}
+cd_dcce <- pcd_test(fit_dcce, test = "pesaran")
+print(cd_dcce)
+```
+
+After DCCE correction with three CSA lags, the CD statistic falls to an
+insignificant level, confirming that the common factors have been filtered out.
+
+## Regularized CCE (rCCE)
+
+The **regularized CCE** of @juodis2022regularized addresses the case where the
+number of CSA variables is large relative to $T$. It replaces the full CSA matrix
+with its first few principal components, regularizing the factor proxy:
+
+```{r rcce-pwt8}
+fit_rcce <- dcce(
+  data               = pwt8,
+  unit_index         = "country",
+  time_index         = "year",
+  formula            = d_log_rgdpo ~ L(log_rgdpo, 1) + log_hc + log_ck + log_ngd,
+  model              = "rcce",
+  cross_section_vars = ~ log_rgdpo + log_hc + log_ck + log_ngd,
+  cross_section_lags = 0
+)
+print(fit_rcce)
+```
+
+## Long-Run Estimators: CS-DL and CS-ARDL
+
+For researchers interested in long-run relationships, the `dcce` package implements
+two estimators from @chudik2016long.
+
+### CS-DL (Cross-Sectionally Augmented Distributed Lag)
+
+The **CS-DL** estimator adds the first difference of $\mathbf{x}$ and its lags
+as short-run regressors alongside the level. The coefficient on the **level** of
+$\mathbf{x}$ directly identifies the long-run effect:
+
+$$
+\Delta y_{it} = \alpha_i + w_i x_{it} + \sum_{\ell=0}^{p_T} \phi_{i\ell} \Delta x_{i,t-\ell}
+                + \text{CSA terms} + u_{it}.
+$$
+
+Here $w_i$ is unit $i$'s long-run coefficient; $\hat{w}^{\text{MG}}$ is the
+mean-group average.
+
+```{r csdl-pwt8}
+fit_csdl <- dcce(
+  data               = pwt8,
+  unit_index         = "country",
+  time_index         = "year",
+  formula            = d_log_rgdpo ~ log_ck + log_hc + log_ngd,
+  model              = "csdl",
+  cross_section_vars = ~ log_rgdpo + log_hc + log_ck + log_ngd,
+  cross_section_lags = 3
+)
+print(fit_csdl)
+```
+
+### CS-ARDL (Cross-Sectionally Augmented ARDL)
+
+The **CS-ARDL** estimator fits an ARDL$(p_y, p_x)$ model with CSAs and recovers
+long-run coefficients via the delta method:
+
+$$
+\text{LR coefficient} = \frac{\sum_{\ell=0}^{p_x} \hat\gamma_\ell}{1 - \sum_{\ell=1}^{p_y} \hat\phi_\ell}.
+$$
+
+```{r csardl-pwt8}
+fit_csardl <- dcce(
+  data               = pwt8,
+  unit_index         = "country",
+  time_index         = "year",
+  formula            = d_log_rgdpo ~ L(log_rgdpo, 1) + log_ck + log_hc + log_ngd,
+  model              = "csardl",
+  cross_section_vars = ~ log_rgdpo + log_hc + log_ck + log_ngd,
+  cross_section_lags = 3
+)
+print(fit_csardl)
+```
+
+## Comparing All Estimators
+
+```{r compare-estimators}
+models <- list(
+  MG      = fit_mg,
+  CCE     = fit_cce,
+  DCCE    = fit_dcce,
+  CS_DL   = fit_csdl,
+  CS_ARDL = fit_csardl
+)
+
+# Extract coefficient on physical capital (log_ck) across models
+key_var <- "log_ck"
+compare <- data.frame(
+  estimator = names(models),
+  estimate  = vapply(models, function(m) {
+    b <- coef(m)
+    if (key_var %in% names(b)) unname(b[key_var]) else NA_real_
+  }, numeric(1)),
+  std_error = vapply(models, function(m) {
+    se <- m$se
+    if (key_var %in% names(se)) unname(se[key_var]) else NA_real_
+  }, numeric(1))
+)
+compare$t_stat <- compare$estimate / compare$std_error
+print(compare, digits = 4)
+```
+
+**Note:** MG, CCE, and DCCE estimate a **short-run** coefficient on `log_ck` within
+a dynamic error-correction specification (with `L(log_rgdpo,1)` on the RHS). CS-DL
+and CS-ARDL target the **long-run** elasticity of GDP with respect to capital, using
+a levels-in-first-difference specification. Direct comparisons across the two groups
+should be interpreted with care.
+
+# The CD Test Suite
+
+`dcce` implements four CD tests, each addressing different aspects of the CSD
+problem.
+
+| Test | Reference | Description |
+|------|-----------|-------------|
+| `pesaran` | @pesaran2015testing | Benchmark; N(0,1) under H0 |
+| `cdw`     | @juodis2022 | Rademacher-weighted; robust to incidental parameters |
+| `pea`     | @fan2015power | Power-enhanced; better against sparse alternatives |
+| `cdstar`  | @pesaran2021cdstar | Bias-corrected for panels with strong factors |
+
+```{r cd-all-tests}
+# Run all four CD tests on DCCE residuals
+cd_all <- pcd_test(fit_dcce,
+                   test   = c("pesaran", "cdw", "pea", "cdstar"),
+                   n_reps = 199)
+print(cd_all)
+```
+
+**Interpretation:** The four tests have different power properties:
+
+- **Pesaran CD** is the workhorse benchmark. Insignificance ($|CD| < 1.96$) indicates
+  that the estimator has removed the dominant common factor(s).
+- **CDw** (Juodis-Reese) corrects for incidental parameter bias in dynamic panels;
+  a value near zero confirms no systematic residual dependence.
+- **PEA** is power-enhanced against **sparse** alternatives (a few strongly correlated
+  pairs). It can remain significant even when the average pairwise correlation is
+  near zero, so significance here need not contradict the Pesaran CD result.
+- **CD\*** applies a PCA-based bias correction for panels with strong factors;
+  borderline significance reflects the strength of the factor structure in the data.
+
+The key diagnostic is the **Pesaran CD**: after DCCE with three lags, a value
+close to zero (well below $\pm 1.96$) confirms that the common factors have been
+successfully absorbed.
+
+# Bootstrap Inference
+
+Asymptotic standard errors for DCCE rest on the central limit theorem approximation
+$\hat{\boldsymbol{\beta}}^{\text{MG}} \approx \mathcal{N}(\boldsymbol{\beta}, V/N)$.
+In panels with small $N$, bootstrap confidence intervals are preferable.
+
+`dcce` provides a `bootstrap()` function with two schemes:
+
+- **Cross-section bootstrap** (default): resamples units with replacement, preserving
+  time-series dynamics within each unit.
+- **Wild bootstrap**: multiplies residuals by Rademacher or Mammen weights to
+  preserve heteroskedasticity.
+
+```{r bootstrap, eval=FALSE}
+# Cross-section bootstrap (not evaluated in vignette to limit build time)
+set.seed(42)
+boot_res <- bootstrap(fit_dcce, type = "crosssection", reps = 499)
+print(boot_res)
+```
+
+For a quick illustration on the simulated dataset (smaller $N$ and $T$):
+
+```{r bootstrap-sim}
+data(dcce_sim, package = "dcce")
+
+fit_sim <- dcce(
+  data               = dcce_sim,
+  unit_index         = "unit",
+  time_index         = "time",
+  formula            = y ~ L(y, 1) + x,
+  model              = "dcce",
+  cross_section_vars = ~ y + x,
+  cross_section_lags = 3
+)
+
+set.seed(42)
+boot_sim <- bootstrap(fit_sim, type = "crosssection", reps = 199)
+print(boot_sim)
+```
+
+# Worked Example: Ditzen (2018) Growth Regression
+
+We replicate the core results from @ditzen2018estimating, Section 7, using
+the `pwt8` dataset (Penn World Tables 8, N = 93 countries, T = 48 years,
+1960--2007). The model is a Solow-type growth regression:
+
+$$
+\Delta \log y_{it} = \alpha_i
+  + \phi_i \log y_{i,t-1}
+  + \beta_{1i} \log h_{it}
+  + \beta_{2i} \log k_{it}
+  + \beta_{3i} \log(n_{it} + g + \delta)
+  + \text{CSD correction} + u_{it},
+$$
+
+where $y$ is real GDP (output-side), $h$ is the human capital index, $k$ is the
+physical capital stock, $n+g+\delta$ aggregates population growth and
+depreciation, and $\phi_i = \rho_i - 1$ is the speed of adjustment.
+
+## Step 1: Detect CSD in naive residuals
+
+```{r ex1-ols-cd}
+dat <- na.omit(pwt8[, c("country", "year", "d_log_rgdpo",
+                          "log_rgdpo", "log_hc", "log_ck", "log_ngd")])
+fit_ols2 <- lm(d_log_rgdpo ~ log_hc + log_ck + log_ngd + log_rgdpo, data = dat)
+cd_naive <- pcd_test(residuals(fit_ols2), data = dat,
+                     unit_index = "country", time_index = "year",
+                     test = "pesaran")
+cat(sprintf("CD statistic (OLS): %.2f  p-value: %.4f\n",
+            cd_naive$statistics$statistic[1],
+            cd_naive$statistics$p_value[1]))
+```
+
+**Result:** The CD statistic is large and significant, confirming strong CSD.
+
+## Step 2: Mean Group (no CSD correction)
+
+```{r ex2-mg}
+fit_mg2 <- dcce(
+  data               = pwt8,
+  unit_index         = "country",
+  time_index         = "year",
+  formula            = d_log_rgdpo ~ L(log_rgdpo, 1) + log_hc + log_ck + log_ngd,
+  model              = "mg",
+  cross_section_vars = NULL
+)
+
+cd_mg <- pcd_test(fit_mg2, test = "pesaran")
+cat(sprintf("MG: phi = %.3f, log_ck = %.3f\n",
+            coef(fit_mg2)["L(log_rgdpo,1)"], coef(fit_mg2)["log_ck"]))
+cat(sprintf("CD after MG: %.2f  p-value: %.4f\n",
+            cd_mg$statistics$statistic[1], cd_mg$statistics$p_value[1]))
+```
+
+MG residuals still exhibit significant CSD because MG does not correct for common
+factors.
+
+## Step 3: Dynamic CCE with 3 CSA lags (Ditzen 2018 Example 7.3)
+
+```{r ex3-dcce}
+fit_dcce2 <- dcce(
+  data               = pwt8,
+  unit_index         = "country",
+  time_index         = "year",
+  formula            = d_log_rgdpo ~ L(log_rgdpo, 1) + log_hc + log_ck + log_ngd,
+  model              = "dcce",
+  cross_section_vars = ~ log_rgdpo + log_hc + log_ck + log_ngd,
+  cross_section_lags = 3
+)
+
+cd_dcce2 <- pcd_test(fit_dcce2, test = "pesaran")
+cat(sprintf("DCCE: phi = %.3f, log_ck = %.3f\n",
+            coef(fit_dcce2)["L(log_rgdpo,1)"], coef(fit_dcce2)["log_ck"]))
+cat(sprintf("CD after DCCE(3): %.2f  p-value: %.4f\n",
+            cd_dcce2$statistics$statistic[1], cd_dcce2$statistics$p_value[1]))
+```
+
+After applying DCCE with three CSA lags, the CD statistic is no longer
+significant, indicating that the estimator has successfully absorbed the
+common factors.
+
+## Step 4: Summary table
+
+```{r ex4-summary-table}
+# Coefficient table comparing MG and DCCE
+vars <- c("L(log_rgdpo,1)", "log_hc", "log_ck", "log_ngd")
+tab <- data.frame(
+  Variable = vars,
+  MG_coef  = round(coef(fit_mg2)[vars], 3),
+  MG_se    = round(fit_mg2$se[vars], 3),
+  DCCE_coef = round(coef(fit_dcce2)[vars], 3),
+  DCCE_se   = round(fit_dcce2$se[vars], 3),
+  row.names = NULL
+)
+tab$MG_sig   <- ifelse(abs(coef(fit_mg2)[vars] / fit_mg2$se[vars]) > 1.96, "*", "")
+tab$DCCE_sig <- ifelse(abs(coef(fit_dcce2)[vars] / fit_dcce2$se[vars]) > 1.96, "*", "")
+print(tab)
+```
+
+**Interpretation:**
+
+- The **speed of adjustment** ($\hat\phi$) is negative and significant, confirming
+  mean-reverting dynamics in log GDP. The DCCE estimate ($\approx -0.6$) implies
+  $\hat\rho \approx 0.4$, plausible for this sample.
+- **Physical capital** (`log_ck`) has a positive, significant effect in both
+  specifications, consistent with the Solow model.
+- **Population growth** (`log_ngd`) is negative, also in line with the Solow model.
+- The shift in coefficient magnitudes from MG to DCCE reflects the bias from
+  CSD in the MG estimator.
+
+## Step 5: Unit-level heterogeneity
+
+One advantage of the Mean Group approach is access to unit-level estimates.
+We can examine the distribution of the speed-of-adjustment across countries:
+
+```{r ex5-unit-coefs, fig.alt="Histogram of unit-level speed of adjustment coefficients"}
+b_unit <- coef(fit_dcce2, type = "unit")
+ar_coefs <- b_unit$estimate[b_unit$term == "L(log_rgdpo,1)"]
+rho_implied <- ar_coefs + 1  # rho = (phi + 1)
+
+cat(sprintf("Implied rho: mean = %.3f, median = %.3f, [min, max] = [%.3f, %.3f]\n",
+            mean(rho_implied), median(rho_implied),
+            min(rho_implied), max(rho_implied)))
+cat(sprintf("Fraction with 0 < rho < 1 (stationarity): %.1f%%\n",
+            100 * mean(rho_implied > 0 & rho_implied < 1)))
+
+hist(
+  rho_implied,
+  breaks = 20,
+  main   = "Unit-level AR(1) coefficient (rho = phi + 1)",
+  xlab   = expression(hat(rho)[i]),
+  col    = "steelblue",
+  border = "white"
+)
+abline(v = median(rho_implied), col = "firebrick", lwd = 2, lty = 2)
+legend("topright", legend = "Median", col = "firebrick", lty = 2, lwd = 2, bty = "n")
+```
+
+The distribution is concentrated in $(0, 1)$, confirming stationary dynamics for
+most countries, with the median $\hat\rho \approx 0.4$.
+
+# Auxiliary Diagnostics
+
+## Exponent of cross-sectional dependence
+
+The **CSD exponent** $\alpha$ of @bailey2016exponent characterizes the strength of
+dependence. For $\alpha = 1$ the panel exhibits strong CSD; for $\alpha < 1/2$ the
+CSD is weak and standard estimators remain consistent.
+
+```{r csd-exp}
+# CSD exponent of log real GDP (levels) across countries
+data(pwt8)
+X_lev <- do.call(rbind, by(pwt8, pwt8$country, function(d) d$log_rgdpo))
+# Keep only time periods with no missing values
+X_lev <- X_lev[, colSums(is.na(X_lev)) == 0, drop = FALSE]
+alpha_res <- csd_exp(X_lev, use_residuals = FALSE)
+print(alpha_res)
+```
+
+An estimate of $\hat\alpha \approx 0.84$ is close to 1, signalling strong CSD in log
+real GDP---further motivation for using DCCE. For first-differenced data (growth
+rates) the exponent is typically much lower because differencing strips out the
+common trend.
+
+## Information criterion for CSA lag selection
+
+@margaritella2023information propose IC and PC criteria for selecting the number of
+CSA variables in **static** CCE models. We compare static CCE models with 0--3
+contemporaneous CSA variables (via varying the number of regressors included in
+`cross_section_vars`). For **dynamic** panels, the Chudik-Pesaran rule
+$p_T = \lfloor T^{1/3} \rfloor$ is the standard choice for CSA lags.
+
+```{r ic-selection}
+# Compare static CCE at lag 0 across different CSA variable sets
+# (IC criteria apply to the static CCE case)
+lags_to_try <- 0:3
+models_ic <- lapply(lags_to_try, function(p) {
+  dcce(
+    data               = pwt8,
+    unit_index         = "country",
+    time_index         = "year",
+    formula            = d_log_rgdpo ~ L(log_rgdpo, 1) + log_hc + log_ck + log_ngd,
+    model              = "cce",
+    cross_section_vars = ~ log_rgdpo + log_hc + log_ck + log_ngd,
+    cross_section_lags = p
+  )
+})
+
+ic_values <- sapply(models_ic, function(m) {
+  res <- ic(m, models = models_ic)
+  c(IC1 = res$IC1, IC2 = res$IC2)
+})
+ic_table <- data.frame(lags = lags_to_try, t(ic_values))
+print(ic_table, digits = 5)
+cat(sprintf("IC1 selects %d CSA lag(s)\n", lags_to_try[which.min(ic_table$IC1)]))
+cat(sprintf("IC2 selects %d CSA lag(s)\n", lags_to_try[which.min(ic_table$IC2)]))
+```
+
+A value of 0 selected by IC indicates that contemporaneous CSAs suffice for the
+static CCE specification---consistent with the Pesaran (2006) theoretical
+recommendation. For the dynamic DCCE application above, we use 3 lags as prescribed
+by the Chudik-Pesaran $p_T = \lfloor T^{1/3} \rfloor \approx 3$ rule.
+
+## Rank condition
+
+The **rank condition** of @devos2024rank checks whether the CSA variables span the
+factor space, a necessary condition for CCE consistency:
+
+```{r rank-condition}
+rc <- rank_condition(fit_cce)
+cat(sprintf("Estimated factors (m): %d\n", rc$m))
+cat(sprintf("Rank of avg loadings (g): %d\n", rc$g))
+cat(sprintf("Rank condition (RC = 1 means satisfied): %d\n", rc$RC))
+```
+
+## `broom` compatibility
+
+`dcce_fit` objects are compatible with `broom::tidy()` and `broom::glance()`:
+
+```{r broom-methods}
+tidy(fit_dcce2)
+glance(fit_dcce2)
+```
+
+# Quick-Start Guide
+
+```{r quickstart, eval=FALSE}
+library(dcce)
+data(pwt8)
+
+# 1. Detect CSD
+fit_ols_qs <- lm(d_log_rgdpo ~ log_hc + log_ck + log_ngd, data = na.omit(pwt8))
+pcd_test(residuals(fit_ols_qs), data = na.omit(pwt8),
+         unit_index = "country", time_index = "year",
+         test = "pesaran")
+
+# 2. Estimate with DCCE
+fit_qs <- dcce(
+  data               = pwt8,
+  unit_index         = "country",
+  time_index         = "year",
+  formula            = d_log_rgdpo ~ L(log_rgdpo, 1) + log_hc + log_ck + log_ngd,
+  model              = "dcce",
+  cross_section_vars = ~ log_rgdpo + log_hc + log_ck + log_ngd,
+  cross_section_lags = 3
+)
+
+# 3. Check residuals
+pcd_test(fit_qs, test = "pesaran")
+
+# 4. Tidy output
+tidy(fit_qs)
+glance(fit_qs)
+
+# 5. Bootstrap
+bootstrap(fit_qs, reps = 499)
+```
+
+# References
+
+<div id="refs"></div>

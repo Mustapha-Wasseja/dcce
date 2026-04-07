@@ -1,0 +1,32 @@
+# R-specific
+.Rproj.user/
+.Rhistory
+.RData
+.Ruserdata
+.Rapp.history
+*.Rproj
+*-Ex.R
+
+# R CMD check artifacts
+*.Rcheck/
+..Rcheck/
+*.tar.gz
+Rplots.pdf
+
+# Knitr / vignette build outputs
+vignettes/*.html
+vignettes/*.pdf
+vignettes/*_files/
+vignettes/*_cache/
+inst/doc/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*~
+*.swp
+
+# Claude / agent state (not tracked in source)
+.claude/
