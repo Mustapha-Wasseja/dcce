@@ -10,7 +10,7 @@
 #' @param formula A formula of the form `y ~ x1 + x2`. Supports `L()`, `D()`,
 #'   and `Lrange()` operators for lags, differences, and lag ranges.
 #' @param model Character: estimator to use. One of `"dcce"`, `"cce"`, `"mg"`,
-#'   `"rcce"`, `"pmg"`, `"csdl"`, `"csardl"`. Default `"dcce"`.
+#'   `"amg"`, `"rcce"`, `"pmg"`, `"csdl"`, `"csardl"`. Default `"dcce"`.
 #' @param cross_section_vars A one-sided formula specifying variables for
 #'   cross-sectional averages, e.g. `~ x1 + x2`. Use `~ .` for all RHS
 #'   variables plus the dependent variable. Use `NULL` for no CSAs (plain MG).
@@ -31,6 +31,12 @@
 #'   Default `NULL`.
 #' @param csdl_xlags Integer: number of lags of \eqn{\Delta x} to include as
 #'   short-run controls when `model = "csdl"`. Default 3.
+#' @param fast Logical: use the compiled C++ (RcppArmadillo) unit-OLS fast
+#'   path? Default `TRUE`. Falls back to pure R automatically if the
+#'   compiled routines are not available.
+#' @param n_cores Integer: number of cores for parallel unit estimation.
+#'   Only effective on Unix/macOS via `parallel::mclapply`; on Windows the
+#'   argument is silently ignored. Default `1L` (sequential).
 #' @param run_cd_test Logical: run the Pesaran CD test on residuals? Default
 #'   `FALSE`.
 #' @param full_sample Logical: use the full (unbalanced) sample? Default
@@ -54,7 +60,8 @@
 #'             formula = y ~ x, model = "mg", cross_section_vars = NULL)
 #' coef(fit)
 dcce <- function(data, unit_index, time_index, formula,
-                 model = c("dcce", "cce", "mg", "rcce", "pmg", "csdl", "csardl"),
+                 model = c("dcce", "cce", "mg", "amg", "rcce",
+                           "pmg", "csdl", "csardl"),
                  cross_section_vars = ~ .,
                  cross_section_lags = 0L,
                  pooled_vars = NULL,
@@ -64,6 +71,8 @@ dcce <- function(data, unit_index, time_index, formula,
                  long_run_vars = NULL,
                  long_run_model = NULL,
                  csdl_xlags = 3L,
+                 fast = TRUE,
+                 n_cores = 1L,
                  run_cd_test = FALSE,
                  full_sample = FALSE,
                  verbose = FALSE,
@@ -97,6 +106,20 @@ dcce <- function(data, unit_index, time_index, formula,
     csdl_lr_names <- aug$lr_names
   }
 
+  # -- 2c. AMG common dynamic process -----------------------------------------
+  # For AMG, fit a pooled first-difference regression with time dummies,
+  # extract the time-dummy coefficients as the common dynamic process (CDP),
+  # cumulate them within each unit to level form, and append a single
+  # `cdp_level` column to the RHS. The CDP coefficient is a nuisance
+  # parameter and is stripped from the MG aggregation at the end.
+  amg_cdp <- NULL
+  if (model == "amg") {
+    cdp_df <- .amg_common_dynamic_process(panel, y_name, x_names)
+    panel  <- .amg_attach_cdp_level(panel, cdp_df)
+    x_names <- c(x_names, "cdp_level")
+    amg_cdp <- cdp_df
+  }
+
   # -- 3. Build CSAs if requested ---------------------------------------------
   csa_vars <- NULL
   csa_colnames <- NULL
@@ -116,36 +139,34 @@ dcce <- function(data, unit_index, time_index, formula,
   if (include_constant) rhs_vars <- c("(Intercept)", rhs_vars)
   if (unit_trend) rhs_vars <- c(rhs_vars, "(trend)")
 
-  unit_results <- list()
+  # Pre-build (y, X) per unit and drop units with insufficient df
+  panel_list <- list()
   dropped_units <- character(0)
 
   for (i in seq_along(units)) {
     u <- units[i]
     idx <- which(panel[[unit_var]] == u)
     yi <- panel[[y_name]][idx]
-    Ti <- length(idx)
 
-    # Build X matrix
     Xi <- .build_unit_X(panel, idx, x_names, csa_colnames,
                         include_constant, unit_trend)
 
-    # Drop rows with NAs (from lags/diffs)
     complete <- stats::complete.cases(cbind(yi, Xi))
     yi <- yi[complete]
     Xi <- Xi[complete, , drop = FALSE]
     Ti_eff <- length(yi)
 
-    # Check degrees of freedom
     K_total <- ncol(Xi)
     if (Ti_eff <= K_total) {
       dropped_units <- c(dropped_units, as.character(u))
       next
     }
 
-    # Run OLS
-    fit_i <- .unit_ols(yi, Xi)
-    unit_results[[as.character(u)]] <- fit_i
+    panel_list[[as.character(u)]] <- list(y = yi, X = Xi)
   }
+
+  # Batched unit-level OLS via dispatcher (C++ fast path / parallel / R)
+  unit_results <- .run_unit_loop(panel_list, fast = fast, n_cores = n_cores)
 
   if (length(dropped_units) > 0L) {
     cli::cli_warn(c(
@@ -160,10 +181,14 @@ dcce <- function(data, unit_index, time_index, formula,
   }
 
   # -- 5. Extract only the "interesting" coefficients (not CSA/intercept) ------
-  # For MG aggregation, we want only the structural parameters
+  # For MG aggregation, we want only the structural parameters.
+  # For AMG, strip the `cdp_level` nuisance parameter from the output.
   coef_names_structural <- x_names
   if (include_constant) coef_names_structural <- c("(Intercept)", coef_names_structural)
   if (unit_trend) coef_names_structural <- c(coef_names_structural, "(trend)")
+  if (model == "amg") {
+    coef_names_structural <- setdiff(coef_names_structural, "cdp_level")
+  }
 
   coef_list_full <- lapply(unit_results, `[[`, "b")
   coef_list_structural <- lapply(coef_list_full, function(b) b[coef_names_structural])
@@ -238,12 +263,18 @@ dcce <- function(data, unit_index, time_index, formula,
     mg    = "dcce_mg_fit",
     cce   = "dcce_cce_fit",
     dcce  = "dcce_dcce_fit",
+    amg   = "dcce_amg_fit",
     pmg   = "dcce_pmg_fit",
     csdl  = "dcce_csdl_fit",
     csardl = "dcce_csardl_fit",
     rcce  = "dcce_rcce_fit"
   )
   class(result) <- c(model_class, "dcce_fit")
+
+  # Attach AMG extras so they can be retrieved via the object
+  if (model == "amg") {
+    result$cdp <- amg_cdp
+  }
 
   # -- 9. Long-run / adjustment post-processing -------------------------------
   if (model == "csardl") {

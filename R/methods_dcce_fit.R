@@ -60,6 +60,7 @@ print.dcce_fit <- function(x, ...) {
     mg     = "Mean Group (MG)",
     cce    = "CCE (Mean Group)",
     dcce   = "DCCE (Mean Group)",
+    amg    = "Augmented Mean Group (AMG)",
     pmg    = "Pooled Mean Group (PMG)",
     csdl   = "CS-DL (Long-run)",
     csardl = "CS-ARDL (Short + Long run)",
@@ -373,24 +374,57 @@ plot.dcce_fit <- function(x, which = c("coef", "resid"), ...) {
 #' Predict from a dcce_fit object
 #'
 #' @param object A `dcce_fit` object.
+#' @param newdata Optional data.frame with new observations. When supplied,
+#'   predictions are computed using the Mean Group coefficients on the
+#'   structural regressors (CSAs are not applied because they depend on the
+#'   full cross-section). When \code{NULL}, in-sample unit-level fitted
+#'   values are returned.
+#' @param type Character: \code{"response"} (default) returns predicted y;
+#'   \code{"xb"} is an alias for response (kept for compatibility with
+#'   \pkg{marginaleffects}).
 #' @param ... Ignored.
-#' @return A numeric vector of in-sample predictions.
+#' @return A numeric vector of predictions.
 #' @export
-predict.dcce_fit <- function(object, ...) {
-  pred <- numeric(0)
-  panel <- object$panel
-  unit_var <- attr(panel, "unit_var")
+predict.dcce_fit <- function(object, newdata = NULL,
+                             type = c("response", "xb"), ...) {
+  type <- rlang::arg_match(type)
 
-  for (u in names(object$unit_results)) {
-    idx <- which(panel[[unit_var]] == u)
-    yi <- panel[[object$y_name]][idx]
-    Xi <- .build_unit_X(panel, idx, object$x_names, object$csa_colnames,
-                        object$include_constant, object$unit_trend)
-    complete <- stats::complete.cases(cbind(yi, Xi))
-    Xi_c <- Xi[complete, , drop = FALSE]
+  if (is.null(newdata)) {
+    pred <- numeric(0)
+    panel <- object$panel
+    unit_var <- attr(panel, "unit_var")
 
-    fit_i <- object$unit_results[[u]]
-    pred <- c(pred, as.numeric(Xi_c %*% fit_i$b))
+    for (u in names(object$unit_results)) {
+      idx <- which(panel[[unit_var]] == u)
+      yi <- panel[[object$y_name]][idx]
+      Xi <- .build_unit_X(panel, idx, object$x_names, object$csa_colnames,
+                          object$include_constant, object$unit_trend)
+      complete <- stats::complete.cases(cbind(yi, Xi))
+      Xi_c <- Xi[complete, , drop = FALSE]
+
+      fit_i <- object$unit_results[[u]]
+      pred <- c(pred, as.numeric(Xi_c %*% fit_i$b))
+    }
+    return(pred)
   }
-  pred
+
+  # newdata path: use MG coefficients on structural regressors only.
+  # Useful for marginaleffects which needs a vectorised prediction method.
+  b_mg <- object$coefficients
+  cols <- names(b_mg)
+
+  X <- matrix(0, nrow = nrow(newdata), ncol = length(cols))
+  colnames(X) <- cols
+  for (cn in cols) {
+    if (cn == "(Intercept)") {
+      X[, cn] <- 1
+    } else if (cn == "(trend)") {
+      X[, cn] <- seq_len(nrow(newdata))
+    } else if (cn %in% names(newdata)) {
+      X[, cn] <- as.numeric(newdata[[cn]])
+    } else {
+      cli::cli_abort("Variable {.val {cn}} not found in newdata.")
+    }
+  }
+  as.numeric(X %*% b_mg)
 }

@@ -74,6 +74,99 @@ NULL
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# .run_unit_loop — dispatcher with Rcpp fast path and optional parallelism
+# ──────────────────────────────────────────────────────────────────────────────
+
+#' Run unit-level OLS over a list of (y, X) pairs
+#'
+#' Dispatcher used by \code{dcce()}. Accepts a named list where each element
+#' is a list with elements \code{y} and \code{X}. Returns a list of unit-level
+#' OLS result lists with the same names. Internally dispatches to:
+#' \itemize{
+#'   \item the C++ batch routine (\code{.batch_ols_cpp}) when
+#'         \code{fast = TRUE} and the compiled shared library is available;
+#'   \item \code{parallel::mclapply()} when \code{n_cores > 1} and the
+#'         platform is Unix/macOS;
+#'   \item the pure-R \code{.unit_ols()} in all other cases.
+#' }
+#'
+#' @param panel_list Named list of \code{list(y, X)} pairs.
+#' @param fast Logical: use the compiled C++ fast path when available?
+#'   Default \code{TRUE}.
+#' @param n_cores Integer: number of cores for parallel unit estimation.
+#'   Only effective on Unix/macOS. Default \code{1L} (no parallelism).
+#' @return A named list of unit-level OLS results matching the structure
+#'   returned by \code{.unit_ols()}.
+#' @keywords internal
+.run_unit_loop <- function(panel_list, fast = TRUE, n_cores = 1L) {
+
+  # Helper: post-process a single C++ result so its shape matches
+  # pure-R .unit_ols(): b is a named numeric vector, V is a named matrix,
+  # e is a plain numeric vector, and r2 / sigma2 are scalars.
+  finalize_cpp <- function(res, u) {
+    if (is.null(res) || is.null(res$b)) return(res)
+    cn <- colnames(u$X)
+    res$b <- as.numeric(res$b)
+    if (!is.null(cn)) names(res$b) <- cn
+    if (!is.null(res$V)) {
+      res$V <- as.matrix(res$V)
+      if (!is.null(cn) && nrow(res$V) == length(cn)) {
+        rownames(res$V) <- cn
+        colnames(res$V) <- cn
+      }
+    }
+    if (!is.null(res$e)) res$e <- as.numeric(res$e)
+    if (!is.null(res$r2))     res$r2 <- as.numeric(res$r2)
+    if (!is.null(res$sigma2)) res$sigma2 <- as.numeric(res$sigma2)
+    res
+  }
+
+  # Parallel path (Unix/macOS only; Windows silently falls back)
+  if (n_cores > 1L && .Platform$OS.type == "unix" &&
+      requireNamespace("parallel", quietly = TRUE)) {
+    worker <- if (fast && .dcce_cpp_available()) {
+      function(u) finalize_cpp(.unit_ols_cpp(u$X, u$y), u)
+    } else {
+      function(u) .unit_ols(u$y, u$X)
+    }
+    return(parallel::mclapply(panel_list, worker, mc.cores = n_cores))
+  }
+
+  # Sequential C++ fast path
+  if (fast && .dcce_cpp_available()) {
+    res <- tryCatch(
+      .batch_ols_cpp(panel_list),
+      error = function(e) {
+        cli::cli_warn(c(
+          "RcppArmadillo batch OLS failed; falling back to pure R.",
+          "i" = "Error: {conditionMessage(e)}"
+        ))
+        NULL
+      }
+    )
+    if (!is.null(res)) {
+      # Attach column names from each unit's X back to b/V
+      for (nm in names(res)) {
+        res[[nm]] <- finalize_cpp(res[[nm]], panel_list[[nm]])
+      }
+      return(res)
+    }
+  }
+
+  # Pure-R fallback (always available)
+  lapply(panel_list, function(u) .unit_ols(u$y, u$X))
+}
+
+
+#' Check whether the compiled C++ unit-OLS routines are available
+#' @keywords internal
+.dcce_cpp_available <- function() {
+  exists(".batch_ols_cpp", where = asNamespace("dcce"), inherits = FALSE) &&
+    exists(".unit_ols_cpp",  where = asNamespace("dcce"), inherits = FALSE)
+}
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # .mg_aggregate — Mean Group coefficient
 # ──────────────────────────────────────────────────────────────────────────────
 

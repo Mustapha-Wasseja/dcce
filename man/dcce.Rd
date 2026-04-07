@@ -9,7 +9,7 @@ dcce(
   unit_index,
   time_index,
   formula,
-  model = c("dcce", "cce", "mg", "rcce", "pmg", "csdl", "csardl"),
+  model = c("dcce", "cce", "mg", "amg", "rcce", "pmg", "csdl", "csardl"),
   cross_section_vars = ~.,
   cross_section_lags = 0L,
   pooled_vars = NULL,
@@ -19,6 +19,8 @@ dcce(
   long_run_vars = NULL,
   long_run_model = NULL,
   csdl_xlags = 3L,
+  fast = TRUE,
+  n_cores = 1L,
   run_cd_test = FALSE,
   full_sample = FALSE,
   verbose = FALSE,
@@ -36,7 +38,7 @@ dcce(
 and \code{Lrange()} operators for lags, differences, and lag ranges.}
 
 \item{model}{Character: estimator to use. One of \code{"dcce"}, \code{"cce"}, \code{"mg"},
-\code{"rcce"}, \code{"pmg"}, \code{"csdl"}, \code{"csardl"}. Default \code{"dcce"}.}
+\code{"amg"}, \code{"rcce"}, \code{"pmg"}, \code{"csdl"}, \code{"csardl"}. Default \code{"dcce"}.}
 
 \item{cross_section_vars}{A one-sided formula specifying variables for
 cross-sectional averages, e.g. \code{~ x1 + x2}. Use \code{~ .} for all RHS
@@ -66,6 +68,14 @@ Default \code{NULL}.}
 
 \item{csdl_xlags}{Integer: number of lags of \eqn{\Delta x} to include as
 short-run controls when \code{model = "csdl"}. Default 3.}
+
+\item{fast}{Logical: use the compiled C++ (RcppArmadillo) unit-OLS fast
+path? Default \code{TRUE}. Falls back to pure R automatically if the
+compiled routines are not available.}
+
+\item{n_cores}{Integer: number of cores for parallel unit estimation.
+Only effective on Unix/macOS via \code{parallel::mclapply}; on Windows the
+argument is silently ignored. Default \code{1L} (sequential).}
 
 \item{run_cd_test}{Logical: run the Pesaran CD test on residuals? Default
 \code{FALSE}.}

@@ -11,4 +11,6 @@
 #' @importFrom rlang abort warn inform check_required arg_match f_rhs
 #' @importFrom cli cli_abort cli_warn cli_inform
 #' @importFrom tibble tibble as_tibble
+#' @importFrom Rcpp sourceCpp
+#' @useDynLib dcce, .registration = TRUE
 NULL

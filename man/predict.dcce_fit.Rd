@@ -4,15 +4,25 @@
 \alias{predict.dcce_fit}
 \title{Predict from a dcce_fit object}
 \usage{
-\method{predict}{dcce_fit}(object, ...)
+\method{predict}{dcce_fit}(object, newdata = NULL, type = c("response", "xb"), ...)
 }
 \arguments{
 \item{object}{A \code{dcce_fit} object.}
 
+\item{newdata}{Optional data.frame with new observations. When supplied,
+predictions are computed using the Mean Group coefficients on the
+structural regressors (CSAs are not applied because they depend on the
+full cross-section). When \code{NULL}, in-sample unit-level fitted
+values are returned.}
+
+\item{type}{Character: \code{"response"} (default) returns predicted y;
+\code{"xb"} is an alias for response (kept for compatibility with
+\pkg{marginaleffects}).}
+
 \item{...}{Ignored.}
 }
 \value{
-A numeric vector of in-sample predictions.
+A numeric vector of predictions.
 }
 \description{
 Predict from a dcce_fit object
