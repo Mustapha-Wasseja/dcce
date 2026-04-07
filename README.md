@@ -127,96 +127,10 @@ vignette("dcce-introduction", package = "dcce")
 
 ---
 
-## Testing the package
+## Verify your installation
 
-The package ships with a comprehensive test suite (15 test files, 200+ assertions)
-covering every estimator, diagnostic, and helper function. There are several ways
-to test it.
-
-### 1. Run the test suite from R
-
-After installing the package (or while developing locally):
-
-```r
-# Install testing tools
-install.packages(c("devtools", "testthat"))
-
-# From the package directory:
-devtools::test()
-```
-
-You should see output similar to:
-
-```
-ℹ Testing dcce
-benchmarks: ....
-bootstrap: ..............
-cce: ..........
-csa: ...............................
-csd: ...........
-dcce: ...............
-ditzen-replication: .............
-ic: .......
-mg: .......................
-panel-utils: ..........................................................
-pcd: .................
-pmg: ......
-produc-validation: ..................
-rank: .....
-rcce: .......
-
-══ DONE ════════════════════════════════════════════════════════════════════════
-```
-
-### 2. Run a single test file
-
-```r
-devtools::test_active_file("tests/testthat/test-dcce.R")
-```
-
-Or from the command line:
-
-```bash
-Rscript -e 'devtools::test_active_file("tests/testthat/test-dcce.R")'
-```
-
-### 3. Run `R CMD check` (recommended before any contribution)
-
-```r
-devtools::check()
-```
-
-This runs the full CRAN-equivalent check pipeline:
-
-- Builds the package
-- Verifies DESCRIPTION, NAMESPACE, and documentation
-- Runs all examples
-- Runs the test suite
-- Builds the vignette
-- Reports errors, warnings, and notes
-
-For the strictest CRAN compliance check:
-
-```r
-devtools::check(args = "--as-cran")
-```
-
-### 4. Test from the shell with `R CMD`
-
-```bash
-# Clone the repo
-git clone https://github.com/Mustapha-Wasseja/dcce.git
-cd dcce
-
-# Build and check
-R CMD build .
-R CMD check dcce_*.tar.gz --as-cran
-```
-
-### 5. Try the worked examples
-
-The fastest way to verify the package works on your system is to run the
-examples from the vignette:
+The fastest way to confirm the package works on your system is to run a few
+of the worked examples on the bundled datasets:
 
 ```r
 library(dcce)
@@ -247,15 +161,12 @@ boot <- bootstrap(fit_dcce, type = "crosssection", reps = 199)
 print(boot)
 ```
 
-### 6. Validate against `plm` (optional sanity check)
+### Optional: validate against `plm`
 
-If you have `plm` installed, the package's static CCE estimator should match
-`plm::pmg(..., model = "cmg")` to three decimal places. The test file
-`tests/testthat/test-produc-validation.R` runs this comparison automatically:
-
-```r
-devtools::test_active_file("tests/testthat/test-produc-validation.R")
-```
+If you have `plm` installed, the package's static CCE estimator matches
+`plm::pmg(..., model = "cmg")` to three decimal places on the Produc
+dataset. This is checked automatically by the bundled
+`tests/testthat/test-produc-validation.R` file.
 
 ---
 
