@@ -73,6 +73,19 @@ test_that("n_cores argument is accepted (silently ignored on Windows)", {
 })
 
 
+test_that(".run_unit_loop returns an empty list for an empty panel", {
+  # Regression test for the bug exposed when every unit is dropped because
+  # of insufficient degrees of freedom: the C++ batch routine used to
+  # crash with "Not compatible with STRSXP". The dispatcher should now
+  # short-circuit on empty input and return an empty named list, allowing
+  # dcce() to surface a clean error message instead.
+  res_r   <- .run_unit_loop(list(), fast = FALSE)
+  res_cpp <- .run_unit_loop(list(), fast = TRUE)
+  expect_identical(res_r, list())
+  expect_identical(res_cpp, list())
+})
+
+
 test_that(".unit_ols_cpp and .unit_ols return identical results on a single unit", {
   set.seed(42)
   T_val <- 40

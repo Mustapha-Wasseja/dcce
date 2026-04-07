@@ -100,6 +100,10 @@ NULL
 #' @keywords internal
 .run_unit_loop <- function(panel_list, fast = TRUE, n_cores = 1L) {
 
+  # Empty panel list — return an empty named list rather than crashing
+  # the C++ side. dcce() will then surface a clean diagnostic to the user.
+  if (length(panel_list) == 0L) return(list())
+
   # Helper: post-process a single C++ result so its shape matches
   # pure-R .unit_ols(): b is a named numeric vector, V is a named matrix,
   # e is a plain numeric vector, and r2 / sigma2 are scalars.
