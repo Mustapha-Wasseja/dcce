@@ -13,8 +13,9 @@
 #' @param unit_index Character: name of the unit variable in `data`.
 #' @param time_index Character: name of the time variable in `data`.
 #' @param test Character vector specifying which tests to compute.
-#'   One or more of `"pesaran"`, `"cdw"`, `"pea"`, `"cdstar"`.
-#'   Default uses all four.
+#'   One or more of `"pesaran"`, `"cdw"`, `"cdwplus"`, `"pea"`, `"cdstar"`.
+#'   Default uses all five. See Pesaran (2015), Juodis & Reese (2022),
+#'   Baltagi, Feng & Kao (2012), Fan et al. (2015), Pesaran & Xie (2021).
 #' @param n_reps Integer: number of Rademacher draws for CDw. Default 500.
 #' @param n_pca Integer: number of principal components for CD* bias
 #'   correction. Default 1.
@@ -47,7 +48,7 @@ pcd_test <- function(x, ...) {
 #' @rdname pcd_test
 #' @export
 pcd_test.dcce_fit <- function(x, ...,
-                              test   = c("pesaran", "cdw", "pea", "cdstar"),
+                              test   = c("pesaran", "cdw", "cdwplus", "pea", "cdstar"),
                               n_reps = 500L,
                               n_pca  = 1L) {
   test <- .validate_cd_tests(test)
@@ -106,7 +107,7 @@ pcd_test.default <- function(x, ...,
                              data       = NULL,
                              unit_index = NULL,
                              time_index = NULL,
-                             test   = c("pesaran", "cdw", "pea", "cdstar"),
+                             test   = c("pesaran", "cdw", "cdwplus", "pea", "cdstar"),
                              n_reps = 500L,
                              n_pca  = 1L) {
   test <- .validate_cd_tests(test)
@@ -132,7 +133,7 @@ pcd_test.default <- function(x, ...,
 #' Validate CD test names
 #' @keywords internal
 .validate_cd_tests <- function(test) {
-  valid_tests <- c("pesaran", "cdw", "pea", "cdstar")
+  valid_tests <- c("pesaran", "cdw", "cdwplus", "pea", "cdstar")
   bad <- setdiff(test, valid_tests)
   if (length(bad) > 0L) {
     cli::cli_abort(
@@ -168,6 +169,14 @@ pcd_test.default <- function(x, ...,
     cdw_stat <- .cd_weighted(em, n_reps)
     p_val <- 2 * stats::pnorm(-abs(cdw_stat))
     results <- rbind(results, data.frame(test = "cdw", statistic = cdw_stat,
+                                         p_value = p_val, stringsAsFactors = FALSE))
+  }
+
+  # ── cdw+ (Baltagi, Feng & Kao 2012 bias-adjusted LM, weighted) ──────────
+  if ("cdwplus" %in% test) {
+    cdwplus_stat <- .cd_weighted_plus(em, n_reps)
+    p_val <- 2 * stats::pnorm(-abs(cdwplus_stat))
+    results <- rbind(results, data.frame(test = "cdwplus", statistic = cdwplus_stat,
                                          p_value = p_val, stringsAsFactors = FALSE))
   }
 
@@ -269,6 +278,50 @@ pcd_test.default <- function(x, ...,
   mean(cdw_vals)
 }
 
+#' Bias-adjusted weighted CD (CDw+) statistic
+#'
+#' Implements a bias-adjusted LM-style test with random sign weighting.
+#' The base statistic is the Baltagi, Feng & Kao (2012) bias-adjusted LM:
+#' \deqn{LM_{adj} = \sqrt{\frac{1}{N(N-1)}} \sum_{i<j}
+#'   \frac{(T_{ij}-1) \hat\rho_{ij}^2 - 1}{\sqrt{2}},}
+#' which is asymptotically standard normal under the null. The "weighted
+#' plus" variant multiplies each pairwise term by random Rademacher weights
+#' \eqn{w_i w_j} and averages the absolute value across draws, producing a
+#' statistic that is robust to heteroskedasticity and sensitive to sparse
+#' alternatives.
+#' @keywords internal
+.cd_weighted_plus <- function(em, n_reps) {
+  N <- nrow(em)
+  if (N < 2L) return(NA_real_)
+
+  vals <- numeric(n_reps)
+  for (r in seq_len(n_reps)) {
+    w <- sample(c(-1, 1), N, replace = TRUE)
+
+    sum_term <- 0
+    count <- 0
+    for (i in 1:(N - 1)) {
+      for (j in (i + 1):N) {
+        valid <- !is.na(em[i, ]) & !is.na(em[j, ])
+        Tij <- sum(valid)
+        if (Tij < 3L) next
+        rho_ij <- stats::cor(em[i, valid], em[j, valid])
+        # Bias-adjusted squared correlation
+        term <- ((Tij - 1) * rho_ij^2 - 1) / sqrt(2)
+        sum_term <- sum_term + w[i] * w[j] * term
+        count <- count + 1
+      }
+    }
+    if (count == 0L) {
+      vals[r] <- NA_real_
+    } else {
+      vals[r] <- sqrt(1 / (N * (N - 1))) * sum_term
+    }
+  }
+  mean(abs(vals), na.rm = TRUE)
+}
+
+
 #' PEA (Fan et al. 2015) power-enhanced statistic
 #' @keywords internal
 .cd_pea <- function(rho_ij, N, T_val, em) {
@@ -358,6 +411,7 @@ print.dcce_cd <- function(x, ...) {
   label_map <- c(
     pesaran = "CD",
     cdw     = "CDw",
+    cdwplus = "CDw+",
     pea     = "PEA",
     cdstar  = "CD*"
   )

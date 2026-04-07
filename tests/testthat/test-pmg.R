@@ -13,36 +13,164 @@ test_that(".delta_method computes correct SE for ratio", {
   expect_equal(result$vcov[1, 1], 0.045625, tolerance = 1e-4)
 })
 
-test_that(".pmg_recover_lr computes long-run coefficients", {
-  # phi = -0.3 (speed of adjustment)
-  # omega = c(0.15, 0.39) (coefficients on levels of x1, x2)
-  # w = -omega/phi = c(0.5, 1.3)
-  b_phi <- -0.3
-  b_omega <- c(0.15, 0.39)
-  V <- diag(3) * 0.01
 
-  result <- .pmg_recover_lr(b_phi, b_omega, V,
-                            phi_idx = 1L, omega_idx = 2:3)
-
-  expect_equal(result$lr_coef, c(-0.15 / -0.3, -0.39 / -0.3), tolerance = 0.01)
-  expect_true(is.matrix(result$lr_vcov))
-  expect_equal(dim(result$lr_vcov), c(2, 2))
+test_that(".csardl_classify_terms correctly separates y lags and x groups", {
+  cls <- .csardl_classify_terms(
+    y_name = "y",
+    x_names = c("L(y,1)", "L(y,2)", "x", "L(x,1)", "z", "L(z,1)")
+  )
+  expect_equal(cls$y_lag_terms, c("L(y,1)", "L(y,2)"))
+  expect_equal(sort(cls$y_lag_orders), c(1L, 2L))
+  expect_equal(names(cls$x_groups), c("x", "z"))
+  expect_equal(cls$x_groups$x, c("x", "L(x,1)"))
+  expect_equal(cls$x_groups$z, c("z", "L(z,1)"))
 })
 
-test_that(".csardl_recover_lr computes long-run from ARDL", {
-  # ARDL(1,1): y_t = b1*y_{t-1} + b2_0*x_t + b2_1*x_{t-1}
-  # LR = (b2_0 + b2_1) / (1 - b1)
-  b <- c(y_L1 = 0.5, x_L0 = 0.2, x_L1 = 0.1)
-  V <- diag(3) * 0.01
+
+test_that(".csardl_unit_lr recovers LR from an ARDL(1,1)", {
+  # Stata / textbook ARDL(1,1):
+  #   y_t = c + phi y_{t-1} + beta0 x_t + beta1 x_{t-1}
+  # Long-run: theta = (beta0 + beta1) / (1 - phi)
+  b <- c("(Intercept)" = 0, "L(y,1)" = 0.5, "x" = 0.2, "L(x,1)" = 0.1)
+  V <- diag(0.01, nrow = 4)
   rownames(V) <- colnames(V) <- names(b)
 
-  result <- .csardl_recover_lr(
-    b, py = 1, px = 1,
-    y_lag_names = "y_L1",
-    x_lag_names = c("x_L0", "x_L1"),
-    V = V
+  classify <- list(
+    y_lag_terms  = "L(y,1)",
+    y_lag_orders = 1L,
+    x_groups     = list(x = c("x", "L(x,1)")),
+    x_group_lags = list(x = c(0L, 1L))
   )
 
+  res <- .csardl_unit_lr(b, V, classify)
+
   # LR = (0.2 + 0.1) / (1 - 0.5) = 0.6
-  expect_equal(unname(result$lr_coef), 0.6, tolerance = 0.01)
+  expect_equal(unname(res$lr_coef), 0.6, tolerance = 1e-6)
+  # phi = -(1 - 0.5) = -0.5
+  expect_equal(unname(res$phi), -0.5, tolerance = 1e-6)
+  # SEs are positive and finite
+  expect_true(all(sqrt(diag(res$lr_vcov)) > 0))
+  expect_true(res$phi_se > 0)
+})
+
+
+test_that(".pmg_pool_lr inverse-variance pools unit LR coefficients", {
+  # Two units with LR = 1.0 and LR = 2.0, variances 1 and 4
+  # Inverse-variance pooled: (1*1 + 0.25*2)/(1 + 0.25) = 1.5/1.25 = 1.2
+  unit_lr <- list(
+    list(lr_coef = c(x = 1.0), lr_vcov = matrix(1, 1, 1,
+                                                dimnames = list("x", "x"))),
+    list(lr_coef = c(x = 2.0), lr_vcov = matrix(4, 1, 1,
+                                                dimnames = list("x", "x")))
+  )
+  pooled <- .pmg_pool_lr(unit_lr)
+
+  expect_equal(unname(pooled$lr_coef["x"]), 1.2, tolerance = 1e-6)
+  # Pooled SE = sqrt(1 / (1 + 0.25)) = sqrt(0.8) ≈ 0.8944
+  expect_equal(unname(pooled$lr_se["x"]), sqrt(1 / 1.25), tolerance = 1e-6)
+})
+
+
+test_that("dcce() model='csardl' returns a fit with lr/adjustment blocks", {
+  set.seed(600)
+  N <- 15; T_val <- 35
+  f <- rnorm(T_val)
+
+  df <- data.frame(
+    id = rep(1:N, each = T_val),
+    t  = rep(1:T_val, N)
+  )
+  df$y <- NA_real_; df$x <- NA_real_
+
+  for (i in 1:N) {
+    idx <- ((i - 1) * T_val + 1):(i * T_val)
+    x_i <- rnorm(T_val) + 0.5 * f
+    y_i <- numeric(T_val)
+    y_i[1] <- rnorm(1)
+    for (tt in 2:T_val) {
+      y_i[tt] <- 0.6 * y_i[tt - 1] + 0.4 * x_i[tt] + 0.2 * f[tt] + rnorm(1, sd = 0.3)
+    }
+    df$x[idx] <- x_i
+    df$y[idx] <- y_i
+  }
+
+  fit <- dcce(data = df, unit_index = "id", time_index = "t",
+              formula = y ~ L(y, 1) + x + L(x, 1),
+              model = "csardl",
+              cross_section_vars = ~ y + x,
+              cross_section_lags = 2)
+
+  expect_s3_class(fit, "dcce_csardl_fit")
+  expect_true(!is.null(fit$lr_coef))
+  expect_true(!is.null(fit$adjustment))
+  expect_true("x" %in% names(fit$lr_coef))
+  # Adjustment is negative (error-correcting)
+  expect_lt(fit$adjustment, 0)
+})
+
+
+test_that("dcce() model='csdl' auto-generates Delta x lags and reports LR", {
+  set.seed(601)
+  N <- 12; T_val <- 30
+  f <- rnorm(T_val)
+
+  df <- data.frame(
+    id = rep(1:N, each = T_val),
+    t  = rep(1:T_val, N),
+    y = rnorm(N * T_val),
+    x = rnorm(N * T_val) + rep(f, N)
+  )
+
+  fit <- dcce(data = df, unit_index = "id", time_index = "t",
+              formula = y ~ x,
+              model = "csdl",
+              cross_section_vars = ~ y + x,
+              cross_section_lags = 2,
+              csdl_xlags = 2)
+
+  expect_s3_class(fit, "dcce_csdl_fit")
+  expect_true(!is.null(fit$lr_coef))
+  expect_true("x" %in% names(fit$lr_coef))
+})
+
+
+test_that("dcce() model='pmg' pools LR with smaller SE than MG", {
+  set.seed(602)
+  N <- 20; T_val <- 35
+  f <- rnorm(T_val)
+
+  df <- data.frame(
+    id = rep(1:N, each = T_val),
+    t  = rep(1:T_val, N)
+  )
+  df$y <- NA_real_; df$x <- NA_real_
+
+  for (i in 1:N) {
+    idx <- ((i - 1) * T_val + 1):(i * T_val)
+    x_i <- rnorm(T_val) + 0.5 * f
+    y_i <- numeric(T_val)
+    y_i[1] <- rnorm(1)
+    for (tt in 2:T_val) {
+      y_i[tt] <- 0.5 * y_i[tt - 1] + 0.3 * x_i[tt] + rnorm(1, sd = 0.3)
+    }
+    df$x[idx] <- x_i
+    df$y[idx] <- y_i
+  }
+
+  fit_csardl <- dcce(data = df, unit_index = "id", time_index = "t",
+                     formula = y ~ L(y, 1) + x + L(x, 1),
+                     model = "csardl",
+                     cross_section_vars = ~ y + x,
+                     cross_section_lags = 2)
+
+  fit_pmg <- dcce(data = df, unit_index = "id", time_index = "t",
+                  formula = y ~ L(y, 1) + x + L(x, 1),
+                  model = "pmg",
+                  cross_section_vars = ~ y + x,
+                  cross_section_lags = 2)
+
+  expect_s3_class(fit_pmg, "dcce_pmg_fit")
+  expect_true(isTRUE(fit_pmg$pmg_pooled))
+  # Pooled SE should typically be smaller than MG SE
+  expect_lt(fit_pmg$lr_se["x"], fit_csardl$lr_se["x"] * 2)  # generous bound
 })

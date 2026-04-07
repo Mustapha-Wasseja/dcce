@@ -4,10 +4,13 @@
 \alias{tidy.dcce_fit}
 \title{Tidy a dcce_fit object}
 \usage{
-\method{tidy}{dcce_fit}(x, ...)
+\method{tidy}{dcce_fit}(x, include_lr = TRUE, ...)
 }
 \arguments{
 \item{x}{A \code{dcce_fit} object.}
+
+\item{include_lr}{Logical: include long-run and adjustment rows when
+available? Default \code{TRUE}.}
 
 \item{...}{Ignored.}
 }
@@ -18,4 +21,6 @@ A tibble with columns \code{term}, \code{estimate}, \code{std.error},
 \description{
 Returns a tibble of MG coefficients with standard errors, test statistics,
 p-values, and confidence intervals, compatible with the broom package.
+For long-run estimators (CS-ARDL, CS-DL, PMG) the tibble additionally
+includes rows for long-run coefficients and the adjustment speed.
 }

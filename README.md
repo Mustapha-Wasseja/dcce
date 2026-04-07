@@ -13,33 +13,53 @@ suite.
 
 ## Features
 
-| Estimator | Reference |
-|-----------|-----------|
-| Mean Group (MG) | Pesaran & Smith (1995) |
-| Common Correlated Effects (CCE-MG) | Pesaran (2006) |
-| Dynamic CCE (DCCE) | Chudik & Pesaran (2015) |
-| Regularized CCE (rCCE) | Juodis (2022) |
-| CS-DL (long-run) | Chudik et al. (2016) |
-| CS-ARDL (long-run) | Chudik et al. (2016) |
-| Pooled Mean Group (PMG) | Shin, Pesaran & Smith (1999) |
+### Estimators
 
-| Diagnostic | Reference |
-|------------|-----------|
-| CD test | Pesaran (2015) |
-| CDw (randomized) | Juodis & Reese (2022) |
-| PEA (power-enhanced) | Fan, Liao & Yao (2015) |
-| CD\* (bias-corrected) | Pesaran & Xie (2021) |
-| Exponent of CSD | Bailey, Kapetanios & Pesaran (2016, 2019) |
+| Estimator | Reference | Notes |
+|-----------|-----------|-------|
+| Mean Group (MG) | Pesaran & Smith (1995) | heterogeneous slopes |
+| Common Correlated Effects (CCE-MG) | Pesaran (2006) | static, with CSAs |
+| Dynamic CCE (DCCE) | Chudik & Pesaran (2015) | dynamic panel + CSA lags |
+| Regularized CCE (rCCE) | Juodis (2022) | PCA-regularized CSA factor |
+| CS-DL (long-run) | Chudik et al. (2016) | direct LR via level of x |
+| CS-ARDL (short + long run) | Chudik et al. (2016) | full SR / adjustment / LR blocks via delta method |
+| Pooled Mean Group (PMG) | Shin, Pesaran & Smith (1999) | inverse-variance pooled LR |
+
+All three long-run estimators produce a three-block output: **short-run**
+coefficients, the **adjustment** (speed of return to equilibrium), and
+**long-run** elasticities with delta-method standard errors.
+
+### Cross-sectional dependence tests
+
+| Test | Reference | Description |
+|------|-----------|-------------|
+| CD | Pesaran (2015) | benchmark Pesaran CD |
+| CDw | Juodis & Reese (2022) | Rademacher-weighted |
+| **CDw+** | Baltagi, Feng & Kao (2012) | bias-adjusted LM with weighting |
+| PEA | Fan, Liao & Yao (2015) | power-enhanced for sparse alternatives |
+| CD\* | Pesaran & Xie (2021) | bias-corrected for strong factors |
+
+### Other diagnostics
+
+| Tool | Reference |
+|------|-----------|
+| **Pesaran CIPS panel unit root test** | Pesaran (2007) |
+| **Swamy / Pesaran-Yamagata slope heterogeneity test** | Swamy (1970); Pesaran & Yamagata (2008) |
+| **Hausman-style MG vs Pooled test** | — |
+| Exponent of cross-sectional dependence | Bailey, Kapetanios & Pesaran (2016, 2019) |
 | IC for CSA selection | Margaritella & Westerlund (2023) |
 | Rank condition classifier | De Vos, Everaert & Sarafidis (2024) |
-| Cross-section / wild bootstrap | — |
+| Cross-section / wild bootstrap inference | — |
 
-Other features:
+### S3 methods and ergonomics
 
-- `broom`-compatible `tidy()` and `glance()` methods
-- Native support for `L()`, `D()`, and `Lrange()` operators in formulas
+- `broom`-compatible `tidy()` and `glance()` (tidy includes short-run, adjustment, and long-run rows for LR estimators)
+- `confint()` with `type = c("mg", "lr", "adjustment")`
+- `plot()` for unit-level coefficient histograms and residual diagnostics
+- `update()` for refitting with modified arguments
+- `coef(fit, type = "unit")` for unit-level coefficient extraction
+- Native support for `L()`, `D()`, and `Lrange()` operators in formulas (xtdcce2-compatible syntax)
 - Unbalanced panel handling
-- Unit-level coefficient extraction via `coef(fit, type = "unit")`
 
 ---
 

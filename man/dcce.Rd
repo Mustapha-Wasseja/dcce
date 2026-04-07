@@ -18,6 +18,7 @@ dcce(
   bias_correction = c("none", "jackknife", "recursive"),
   long_run_vars = NULL,
   long_run_model = NULL,
+  csdl_xlags = 3L,
   run_cd_test = FALSE,
   full_sample = FALSE,
   verbose = FALSE,
@@ -62,6 +63,9 @@ heterogeneous).}
 
 \item{long_run_model}{Character: long-run model specification (reserved).
 Default \code{NULL}.}
+
+\item{csdl_xlags}{Integer: number of lags of \eqn{\Delta x} to include as
+short-run controls when \code{model = "csdl"}. Default 3.}
 
 \item{run_cd_test}{Logical: run the Pesaran CD test on residuals? Default
 \code{FALSE}.}

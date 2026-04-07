@@ -5,7 +5,14 @@
 \title{CS-DL Estimator Internals}
 \description{
 Internal functions for the Cross-Sectionally augmented Distributed Lag
-(CS-DL) estimator of Chudik et al. (2016). Long-run coefficient \code{w2}
-is estimated directly as the coefficient on the level of x.
+(CS-DL) estimator of Chudik, Mohaddes, Pesaran & Raissi (2016). The CS-DL
+regression is
+\deqn{\Delta y_{it} = \alpha_i + w'_i x_{it}
+                     + \sum_{\ell=0}^{p_x} \phi'_{i\ell} \Delta x_{i,t-\ell}
+                     + \delta'_i \bar{z}_t + u_{it},}
+where the long-run coefficient \eqn{w_i} is identified directly as the
+coefficient on the level of \eqn{x_{it}}. This file provides helpers to
+augment a formula with the required \eqn{\Delta x_{t-\ell}} terms before
+the main \code{dcce()} pipeline runs.
 }
 \keyword{internal}

@@ -5,7 +5,19 @@
 \title{CS-ARDL Estimator Internals}
 \description{
 Internal functions for the Cross-Sectionally augmented ARDL (CS-ARDL)
-estimator of Chudik et al. (2016). Estimates an ARDL(py, px) model
-with CSAs and recovers long-run coefficients via delta method.
+estimator of Chudik, Mohaddes, Pesaran & Raissi (2016). Estimates an
+ARDL\eqn{(p_y, p_x)} model with cross-sectional averages and recovers
+long-run coefficients and the speed of adjustment via the delta method.
+}
+\details{
+The unit-level regression is
+\deqn{y_{it} = \alpha_i + \sum_{p=1}^{P_y} \phi_{ip} y_{i,t-p}
+               + \sum_{q=0}^{P_x} \beta'_{iq} x_{i,t-q}
+               + \delta'_{i} \bar{z}_t + e_{it}.}
+
+The long-run coefficient on \eqn{x_k} is
+\deqn{\theta_{ik} = \frac{\sum_{q=0}^{P_x} \beta_{ikq}}{1 - \sum_{p=1}^{P_y} \phi_{ip}}}
+and the implied speed of adjustment is
+\deqn{\varphi_i = -\left(1 - \sum_{p=1}^{P_y} \phi_{ip}\right).}
 }
 \keyword{internal}

@@ -13,7 +13,7 @@ pcd_test(x, ...)
 \method{pcd_test}{dcce_fit}(
   x,
   ...,
-  test = c("pesaran", "cdw", "pea", "cdstar"),
+  test = c("pesaran", "cdw", "cdwplus", "pea", "cdstar"),
   n_reps = 500L,
   n_pca = 1L
 )
@@ -42,7 +42,7 @@ pcd_test(x, ...)
   data = NULL,
   unit_index = NULL,
   time_index = NULL,
-  test = c("pesaran", "cdw", "pea", "cdstar"),
+  test = c("pesaran", "cdw", "cdwplus", "pea", "cdstar"),
   n_reps = 500L,
   n_pca = 1L
 )
@@ -55,8 +55,9 @@ or a data.frame containing the panel structure.}
 \item{...}{Arguments passed to methods.}
 
 \item{test}{Character vector specifying which tests to compute.
-One or more of \code{"pesaran"}, \code{"cdw"}, \code{"pea"}, \code{"cdstar"}.
-Default uses all four.}
+One or more of \code{"pesaran"}, \code{"cdw"}, \code{"cdwplus"}, \code{"pea"}, \code{"cdstar"}.
+Default uses all five. See Pesaran (2015), Juodis & Reese (2022),
+Baltagi, Feng & Kao (2012), Fan et al. (2015), Pesaran & Xie (2021).}
 
 \item{n_reps}{Integer: number of Rademacher draws for CDw. Default 500.}
 

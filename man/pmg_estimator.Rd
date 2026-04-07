@@ -2,9 +2,19 @@
 % Please edit documentation in R/est_pmg.R
 \name{pmg_estimator}
 \alias{pmg_estimator}
-\title{PMG / Error Correction Model Internals}
+\title{Pooled Mean Group (PMG) Estimator Internals}
 \description{
-Internal functions for the Pooled Mean Group (PMG) estimator in
-error-correction form (Shin, Pesaran & Smith, 1999).
+Internal functions for the Pooled Mean Group (PMG) estimator of Pesaran,
+Shin & Smith (1999). PMG imposes common long-run coefficients across
+units while letting the speed of adjustment and short-run dynamics remain
+heterogeneous.
+}
+\details{
+The model is the same ARDL\eqn{(p_y, p_x)} as CS-ARDL, but the long-run
+coefficient vector \eqn{\theta} is pooled. This implementation uses a
+two-step inverse-variance weighted pooling of the unit-level long-run
+coefficients obtained from the CS-ARDL fit, a simplification of the
+concentrated maximum-likelihood estimator of Pesaran, Shin & Smith (1999)
+that is fast, consistent, and requires no numerical optimisation.
 }
 \keyword{internal}

@@ -29,6 +29,8 @@
 #'   (reserved for CSDL/CSARDL models). Default `NULL`.
 #' @param long_run_model Character: long-run model specification (reserved).
 #'   Default `NULL`.
+#' @param csdl_xlags Integer: number of lags of \eqn{\Delta x} to include as
+#'   short-run controls when `model = "csdl"`. Default 3.
 #' @param run_cd_test Logical: run the Pesaran CD test on residuals? Default
 #'   `FALSE`.
 #' @param full_sample Logical: use the full (unbalanced) sample? Default
@@ -61,6 +63,7 @@ dcce <- function(data, unit_index, time_index, formula,
                  bias_correction = c("none", "jackknife", "recursive"),
                  long_run_vars = NULL,
                  long_run_model = NULL,
+                 csdl_xlags = 3L,
                  run_cd_test = FALSE,
                  full_sample = FALSE,
                  verbose = FALSE,
@@ -80,6 +83,19 @@ dcce <- function(data, unit_index, time_index, formula,
   parsed <- .parse_dcce_formula(formula, panel, unit_var, time_var)
   y_name <- parsed$y_name
   x_names <- parsed$x_names
+
+  # -- 2b. CS-DL formula augmentation -----------------------------------------
+  # For CS-DL, replace the LHS with Delta y and augment the RHS with
+  # contemporaneous and lagged Delta x terms. The long-run coefficient is
+  # the coefficient on the level of x (which is kept in x_names).
+  csdl_lr_names <- NULL
+  if (model == "csdl") {
+    aug <- .csdl_augment(panel, y_name, x_names, p_x = as.integer(csdl_xlags))
+    panel <- aug$panel
+    y_name <- aug$y_diff_name
+    x_names <- aug$rhs_terms
+    csdl_lr_names <- aug$lr_names
+  }
 
   # -- 3. Build CSAs if requested ---------------------------------------------
   csa_vars <- NULL
@@ -228,6 +244,17 @@ dcce <- function(data, unit_index, time_index, formula,
     rcce  = "dcce_rcce_fit"
   )
   class(result) <- c(model_class, "dcce_fit")
+
+  # -- 9. Long-run / adjustment post-processing -------------------------------
+  if (model == "csardl") {
+    result <- .csardl_postprocess(result)
+  } else if (model == "pmg") {
+    # PMG shares the CS-ARDL backbone but pools the long-run coefficients.
+    result <- .csardl_postprocess(result)
+    result <- .pmg_postprocess(result)
+  } else if (model == "csdl") {
+    result <- .csdl_postprocess(result, csdl_lr_names)
+  }
 
   result
 }

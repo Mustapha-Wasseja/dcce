@@ -298,59 +298,113 @@ fit_rcce <- dcce(
 print(fit_rcce)
 ```
 
-## Long-Run Estimators: CS-DL and CS-ARDL
+## Long-Run Estimators: CS-DL, CS-ARDL, and PMG
 
-For researchers interested in long-run relationships, the `dcce` package implements
-two estimators from @chudik2016long.
+For researchers interested in long-run relationships, `dcce` implements three
+estimators. All three produce a three-block print output: **short-run**
+coefficients, the **adjustment** (speed of adjustment to equilibrium), and
+**long-run** coefficients.
 
 ### CS-DL (Cross-Sectionally Augmented Distributed Lag)
 
-The **CS-DL** estimator adds the first difference of $\mathbf{x}$ and its lags
-as short-run regressors alongside the level. The coefficient on the **level** of
-$\mathbf{x}$ directly identifies the long-run effect:
+The **CS-DL** estimator of @chudik2016long uses \(\Delta y_{it}\) as the
+dependent variable and regresses it on the **level** of \(x_{it}\) (whose
+coefficient is the long-run effect) plus the contemporaneous and lagged
+first differences of \(x\) (as short-run controls) plus CSAs:
 
 $$
-\Delta y_{it} = \alpha_i + w_i x_{it} + \sum_{\ell=0}^{p_T} \phi_{i\ell} \Delta x_{i,t-\ell}
-                + \text{CSA terms} + u_{it}.
+\Delta y_{it} = \alpha_i + w'_i x_{it}
+                + \sum_{\ell=0}^{p_x} \phi'_{i\ell} \Delta x_{i,t-\ell}
+                + \delta'_i \bar{\mathbf{z}}_t + u_{it}.
 $$
 
-Here $w_i$ is unit $i$'s long-run coefficient; $\hat{w}^{\text{MG}}$ is the
-mean-group average.
+`dcce` **automatically** constructs \(\Delta y\) as the LHS and adds
+\(\Delta x, \Delta x_{-1}, \ldots, \Delta x_{-p_x}\) when `model = "csdl"`.
+You just provide the levels formula and set `csdl_xlags`:
 
 ```{r csdl-pwt8}
 fit_csdl <- dcce(
   data               = pwt8,
   unit_index         = "country",
   time_index         = "year",
-  formula            = d_log_rgdpo ~ log_ck + log_hc + log_ngd,
+  formula            = log_rgdpo ~ log_ck + log_hc + log_ngd,
   model              = "csdl",
   cross_section_vars = ~ log_rgdpo + log_hc + log_ck + log_ngd,
-  cross_section_lags = 3
+  cross_section_lags = 3,
+  csdl_xlags         = 3
 )
 print(fit_csdl)
 ```
 
+The coefficients on `log_ck`, `log_hc`, and `log_ngd` in the **Long-run
+Estimates** block are the long-run elasticities of GDP.
+
 ### CS-ARDL (Cross-Sectionally Augmented ARDL)
 
-The **CS-ARDL** estimator fits an ARDL$(p_y, p_x)$ model with CSAs and recovers
-long-run coefficients via the delta method:
+The **CS-ARDL** estimator fits an ARDL\((p_y, p_x)\) model with CSAs per unit
+and recovers long-run coefficients and the speed of adjustment via the delta
+method:
 
 $$
-\text{LR coefficient} = \frac{\sum_{\ell=0}^{p_x} \hat\gamma_\ell}{1 - \sum_{\ell=1}^{p_y} \hat\phi_\ell}.
+y_{it} = \alpha_i + \sum_{p=1}^{P_y} \phi_{ip} y_{i,t-p}
+                  + \sum_{q=0}^{P_x} \beta'_{iq} x_{i,t-q}
+                  + \delta'_i \bar{\mathbf{z}}_t + e_{it},
 $$
+
+with long-run coefficients
+\(\theta_{ik} = \frac{\sum_q \beta_{ikq}}{1 - \sum_p \phi_{ip}}\) and
+adjustment speed \(\varphi_i = -(1 - \sum_p \phi_{ip})\). Users specify the
+dynamic structure explicitly using `L()` in the formula:
 
 ```{r csardl-pwt8}
 fit_csardl <- dcce(
   data               = pwt8,
   unit_index         = "country",
   time_index         = "year",
-  formula            = d_log_rgdpo ~ L(log_rgdpo, 1) + log_ck + log_hc + log_ngd,
+  formula            = log_rgdpo ~ L(log_rgdpo, 1)
+                                   + log_hc + L(log_hc, 1)
+                                   + log_ck + L(log_ck, 1)
+                                   + log_ngd + L(log_ngd, 1),
   model              = "csardl",
   cross_section_vars = ~ log_rgdpo + log_hc + log_ck + log_ngd,
   cross_section_lags = 3
 )
 print(fit_csardl)
 ```
+
+The output shows three blocks:
+
+1. **Short-run** coefficients from the ARDL(1,1) regression (unit-level OLS, MG average)
+2. **Adjustment term** \(\varphi \approx -0.69\), meaning about 69% of the deviation from
+   equilibrium is corrected each period
+3. **Long-run** elasticities recovered via the delta method, with MG standard errors
+
+### PMG (Pooled Mean Group)
+
+The **PMG** estimator of @shin1999ardl imposes **common long-run coefficients**
+across units while keeping adjustment and short-run dynamics heterogeneous.
+`dcce` implements PMG via inverse-variance weighted pooling of the unit-level
+CS-ARDL long-run estimates — a fast, consistent alternative to the Pesaran-Shin-Smith
+concentrated-MLE that avoids numerical optimization.
+
+```{r pmg-pwt8}
+fit_pmg <- dcce(
+  data               = pwt8,
+  unit_index         = "country",
+  time_index         = "year",
+  formula            = log_rgdpo ~ L(log_rgdpo, 1)
+                                   + log_hc + L(log_hc, 1)
+                                   + log_ck + L(log_ck, 1)
+                                   + log_ngd + L(log_ngd, 1),
+  model              = "pmg",
+  cross_section_vars = ~ log_rgdpo + log_hc + log_ck + log_ngd,
+  cross_section_lags = 3
+)
+print(fit_pmg)
+```
+
+Compared to CS-ARDL, PMG produces **tighter** standard errors on the long-run
+coefficients because it exploits the homogeneity restriction.
 
 ## Comparing All Estimators
 
@@ -395,13 +449,15 @@ problem.
 |------|-----------|-------------|
 | `pesaran` | @pesaran2015testing | Benchmark; N(0,1) under H0 |
 | `cdw`     | @juodis2022 | Rademacher-weighted; robust to incidental parameters |
+| `cdwplus` | Baltagi, Feng & Kao (2012) | Bias-adjusted LM with random sign weighting |
 | `pea`     | @fan2015power | Power-enhanced; better against sparse alternatives |
 | `cdstar`  | @pesaran2021cdstar | Bias-corrected for panels with strong factors |
 
 ```{r cd-all-tests}
-# Run all four CD tests on DCCE residuals
+# Run all five CD tests on DCCE residuals
+set.seed(42)
 cd_all <- pcd_test(fit_dcce,
-                   test   = c("pesaran", "cdw", "pea", "cdstar"),
+                   test   = c("pesaran", "cdw", "cdwplus", "pea", "cdstar"),
                    n_reps = 199)
 print(cd_all)
 ```
@@ -677,14 +733,86 @@ cat(sprintf("Rank of avg loadings (g): %d\n", rc$g))
 cat(sprintf("Rank condition (RC = 1 means satisfied): %d\n", rc$RC))
 ```
 
+## Panel unit root test: Pesaran CIPS
+
+The **CIPS** test of @pesaran2007simple is the workhorse panel unit root test
+under cross-sectional dependence. It augments unit-level Dickey-Fuller
+regressions with cross-sectional averages and averages the resulting
+CADF t-statistics.
+
+```{r cips-test}
+X_lev <- do.call(rbind, by(pwt8, pwt8$country, function(d) d$log_rgdpo))
+X_lev <- X_lev[, colSums(is.na(X_lev)) == 0, drop = FALSE]
+cips_res <- cips_test(X_lev, lags = 1, trend = FALSE)
+print(cips_res)
+```
+
+A CIPS statistic below the 5% critical value of \(-2.27\) rejects the null of a
+panel unit root.
+
+## Slope heterogeneity: Swamy and Pesaran-Yamagata
+
+Before deciding between MG and a pooled estimator, you should formally test
+whether slopes are homogeneous. The **Swamy (1970)** test and its standardised
+large-\(N\) version due to **Pesaran & Yamagata (2008)** are implemented as
+`swamy_test()`:
+
+```{r swamy-test}
+swamy_test(fit_cce)
+```
+
+A large, significant statistic rejects homogeneity and justifies heterogeneous
+slopes (MG/CCE/DCCE). For this growth regression the test rejects decisively,
+confirming that growth dynamics differ across countries.
+
+## Hausman test: MG vs pooled
+
+A Hausman-style comparison of MG against the weighted pooled estimator:
+
+```{r hausman-test}
+hausman_test(fit_cce)
+```
+
+Under the null (homogeneous slopes) both estimators are consistent; under the
+alternative only MG is. Rejection of the null is another signal that the
+homogeneous-slope assumption is too restrictive.
+
 ## `broom` compatibility
 
-`dcce_fit` objects are compatible with `broom::tidy()` and `broom::glance()`:
+`dcce_fit` objects are compatible with `broom::tidy()` and `broom::glance()`.
+For long-run estimators, `tidy()` additionally includes rows for the adjustment
+speed and the long-run coefficients, tagged in the `type` column:
 
 ```{r broom-methods}
 tidy(fit_dcce2)
 glance(fit_dcce2)
 ```
+
+```{r broom-csardl}
+# For a CS-ARDL fit, tidy() returns short-run, adjustment, and long-run rows
+tidy(fit_csardl)
+```
+
+## Confidence intervals
+
+The `confint()` method supports three types: `"mg"` for the main coefficients,
+`"lr"` for long-run estimates, and `"adjustment"` for the speed of adjustment:
+
+```{r confint-demo}
+confint(fit_csardl, type = "lr", level = 0.90)
+confint(fit_csardl, type = "adjustment")
+```
+
+## Visualising heterogeneity
+
+The `plot()` method shows the distribution of unit-level coefficients:
+
+```{r plot-coef, fig.alt="Histograms of unit-level coefficients for the DCCE growth regression"}
+plot(fit_dcce2, which = "coef")
+```
+
+Each panel corresponds to one regressor; the dashed red line marks the MG mean.
+Use `which = "resid"` for a residual diagnostic plot.
 
 # Quick-Start Guide
 
