@@ -20,13 +20,11 @@ vignettes/*_files/
 vignettes/*_cache/
 inst/doc/
 
-# OS / editor
+# OS / editor / local tooling
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
+.claude/
 *~
 *.swp
-
-# Claude / agent state (not tracked in source)
-.claude/
