@@ -34,6 +34,18 @@
 #' fit <- dcce(df, "id", "t", y ~ x, model = "mg", cross_section_vars = NULL)
 #' boot_res <- bootstrap(fit, reps = 50)
 #' print(boot_res)
+#'
+#' @note **Naming conflict with `broom::bootstrap`.** The `broom` package
+#'   also exports a function called `bootstrap()` (for resampling data
+#'   frames), with a completely different signature. If you load
+#'   `broom` after `dcce`, `broom::bootstrap` will mask `dcce::bootstrap`
+#'   on the search path and calls to `bootstrap(fit, type = ..., reps = ...)`
+#'   will fail with an "unused arguments" error. To avoid the conflict
+#'   you can either (a) use the namespace prefix
+#'   `dcce::bootstrap(fit, ...)`, (b) load `broom` **before** `dcce` so
+#'   `dcce` ends up higher in the search path, or (c) use the
+#'   conflict-free alias `dcce_bootstrap(fit, ...)` which is exported by
+#'   `dcce` and has the same semantics.
 bootstrap <- function(object,
                       type        = c("crosssection", "wild"),
                       reps        = 500L,
@@ -168,6 +180,48 @@ bootstrap <- function(object,
   }
 
   b_boot
+}
+
+
+#' Bootstrap alias that avoids the broom conflict
+#'
+#' Convenience alias for \code{\link{bootstrap}} with an unambiguous
+#' name. \code{broom::bootstrap} is a data-frame resampling helper that
+#' shares a name with \code{dcce::bootstrap} but has a completely
+#' different signature. If you load \code{broom} after \code{dcce} the
+#' broom function masks ours on the search path and calls to
+#' \code{bootstrap(fit, type = ..., reps = ...)} will fail with an
+#' "unused arguments" error. \code{dcce_bootstrap()} is identical to
+#' \code{dcce::bootstrap()} but cannot be masked by any other package.
+#'
+#' @inheritParams bootstrap
+#' @return See \code{\link{bootstrap}}.
+#' @seealso \code{\link{bootstrap}}
+#' @export
+#' @examples
+#' set.seed(42)
+#' df <- data.frame(
+#'   id = rep(1:10, each = 30),
+#'   t  = rep(1:30, 10),
+#'   y  = rnorm(300),
+#'   x  = rnorm(300)
+#' )
+#' fit <- dcce(df, "id", "t", y ~ x, model = "mg", cross_section_vars = NULL)
+#' dcce_bootstrap(fit, reps = 50)
+dcce_bootstrap <- function(object,
+                           type        = c("crosssection", "wild"),
+                           reps        = 500L,
+                           percentile  = TRUE,
+                           cfresiduals = FALSE,
+                           seed        = NULL) {
+  bootstrap(
+    object      = object,
+    type        = type,
+    reps        = reps,
+    percentile  = percentile,
+    cfresiduals = cfresiduals,
+    seed        = seed
+  )
 }
 
 

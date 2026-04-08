@@ -42,6 +42,19 @@ An object of class \code{dcce_boot} with elements:
 Computes bootstrap standard errors and confidence intervals for
 \code{dcce_fit} objects using either cross-section or wild bootstrap.
 }
+\note{
+\strong{Naming conflict with \code{broom::bootstrap}.} The \code{broom} package
+also exports a function called \code{bootstrap()} (for resampling data
+frames), with a completely different signature. If you load
+\code{broom} after \code{dcce}, \code{broom::bootstrap} will mask \code{dcce::bootstrap}
+on the search path and calls to \code{bootstrap(fit, type = ..., reps = ...)}
+will fail with an "unused arguments" error. To avoid the conflict
+you can either (a) use the namespace prefix
+\code{dcce::bootstrap(fit, ...)}, (b) load \code{broom} \strong{before} \code{dcce} so
+\code{dcce} ends up higher in the search path, or (c) use the
+conflict-free alias \code{dcce_bootstrap(fit, ...)} which is exported by
+\code{dcce} and has the same semantics.
+}
 \examples{
 set.seed(42)
 df <- data.frame(
@@ -53,4 +66,5 @@ df <- data.frame(
 fit <- dcce(df, "id", "t", y ~ x, model = "mg", cross_section_vars = NULL)
 boot_res <- bootstrap(fit, reps = 50)
 print(boot_res)
+
 }

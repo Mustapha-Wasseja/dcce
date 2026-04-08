@@ -170,6 +170,23 @@ boot <- bootstrap(fit_dcce, type = "crosssection", reps = 199)
 print(boot)
 ```
 
+### Note: `broom::bootstrap` conflict
+
+If you load `broom` in the same session, `broom::bootstrap` will mask
+`dcce::bootstrap` (they share a name but have completely different
+signatures). Two workarounds, pick either:
+
+```r
+# Option A: use the namespace prefix
+dcce::bootstrap(fit, type = "crosssection", reps = 199)
+
+# Option B: use the conflict-free alias exported by dcce
+dcce_bootstrap(fit, type = "crosssection", reps = 199)
+```
+
+`dcce_bootstrap()` is identical to `dcce::bootstrap()` and cannot be
+masked by any other package.
+
 ### Optional: validate against `plm`
 
 If you have `plm` installed, the package's static CCE estimator matches

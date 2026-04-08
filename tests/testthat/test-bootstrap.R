@@ -1,3 +1,29 @@
+test_that("dcce_bootstrap() alias matches bootstrap() exactly", {
+  set.seed(42)
+  df <- data.frame(
+    id = rep(1:8, each = 25),
+    t  = rep(1:25, 8),
+    y  = rnorm(200),
+    x  = rnorm(200)
+  )
+  fit <- dcce(data = df, unit_index = "id", time_index = "t",
+              formula = y ~ x, model = "mg", cross_section_vars = NULL)
+
+  b1 <- bootstrap(fit,       type = "crosssection", reps = 20, seed = 123)
+  b2 <- dcce_bootstrap(fit,  type = "crosssection", reps = 20, seed = 123)
+
+  expect_s3_class(b1, "dcce_boot")
+  expect_s3_class(b2, "dcce_boot")
+  expect_equal(b1$se_boot, b2$se_boot, tolerance = 1e-12)
+})
+
+
+test_that("dcce_bootstrap is exported from the dcce namespace", {
+  expect_true("dcce_bootstrap" %in% getNamespaceExports("dcce"))
+  expect_true(is.function(dcce::dcce_bootstrap))
+})
+
+
 test_that("bootstrap crosssection produces valid output", {
   set.seed(42)
   N <- 15

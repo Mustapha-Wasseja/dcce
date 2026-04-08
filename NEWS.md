@@ -1,3 +1,22 @@
+# dcce 0.3.1
+
+## Bug fixes / ergonomics
+
+* **New `dcce_bootstrap()` alias.** `broom` exports a function called
+  `bootstrap()` (for resampling data frames) that has a completely
+  different signature from `dcce::bootstrap()`. If `broom` is loaded
+  after `dcce`, the broom version masks ours on the search path and
+  calls of the form `bootstrap(fit, type = "crosssection", reps = 199)`
+  fail with an "unused arguments" error. This release adds
+  `dcce_bootstrap()`, an exported alias with identical semantics to
+  `dcce::bootstrap()` but a conflict-free name. `bootstrap()` itself is
+  unchanged and still available; users who previously wrote
+  `dcce::bootstrap(fit, ...)` can keep doing so.
+* `?bootstrap` now documents the conflict and three workarounds.
+* README updated with the conflict note under "Verify your
+  installation".
+
+
 # dcce 0.3.0
 
 ## New features
