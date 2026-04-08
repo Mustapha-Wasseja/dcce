@@ -1,4 +1,8 @@
 // [[Rcpp::depends(RcppArmadillo)]]
+// Silence Armadillo warnings that would otherwise leak through on
+// near-singular XtX matrices; R-level code already handles rank
+// deficiency via a pinv() fallback and logs its own diagnostics.
+#define ARMA_DONT_PRINT_ERRORS
 #include <RcppArmadillo.h>
 using namespace Rcpp;
 using namespace arma;

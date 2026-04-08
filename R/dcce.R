@@ -31,6 +31,25 @@
 #'   Default `NULL`.
 #' @param csdl_xlags Integer: number of lags of \eqn{\Delta x} to include as
 #'   short-run controls when `model = "csdl"`. Default 3.
+#' @param absorb Either `NULL` (default), a character vector of column
+#'   names, or a one-sided formula like `~ industry + region` specifying
+#'   high-dimensional fixed effects to project out of \eqn{y} and
+#'   \eqn{X} before the main unit loop runs. A single factor uses the
+#'   within transformation; multiple factors use the alternating
+#'   projections of Guimaraes & Portugal (2010) / Correia (2016). The
+#'   unit fixed effects used by CCE estimators are still kept via unit
+#'   intercepts; `absorb` is for *additional* categorical effects on top
+#'   of the cross-section.
+#' @param spatial_weights Optional \eqn{N \times N} numeric matrix of
+#'   spatial weights. When supplied, the global cross-sectional averages
+#'   of classical CCE are replaced with **local**, unit-specific
+#'   weighted averages \eqn{\bar y^W_{i,t} = \sum_j w_{ij} y_{j,t}}. The
+#'   matrix must be square with rows and columns matching the unit
+#'   identifiers (row/column names are used for alignment if present);
+#'   it is row-normalised automatically and the diagonal is zeroed. This
+#'   enables spatial CCE estimation that respects the topology of
+#'   cross-sectional dependence (geographical contiguity, trade links,
+#'   etc.).
 #' @param fast Logical: use the compiled C++ (RcppArmadillo) unit-OLS fast
 #'   path? Default `TRUE`. Falls back to pure R automatically if the
 #'   compiled routines are not available.
@@ -71,6 +90,8 @@ dcce <- function(data, unit_index, time_index, formula,
                  long_run_vars = NULL,
                  long_run_model = NULL,
                  csdl_xlags = 3L,
+                 absorb = NULL,
+                 spatial_weights = NULL,
                  fast = TRUE,
                  n_cores = 1L,
                  run_cd_test = FALSE,
@@ -92,6 +113,18 @@ dcce <- function(data, unit_index, time_index, formula,
   parsed <- .parse_dcce_formula(formula, panel, unit_var, time_var)
   y_name <- parsed$y_name
   x_names <- parsed$x_names
+
+  # -- 2a. Absorb high-dimensional fixed effects ------------------------------
+  # Project out additional grouping factors (e.g. industry, region,
+  # sub-period) from y and X before CSA construction and the unit loop.
+  # The unit fixed effects are still handled via unit intercepts.
+  absorb_groups <- .absorb_resolve(absorb, panel)
+  if (!is.null(absorb_groups)) {
+    # Demean y and the base regressors. CSAs are built later from the
+    # demeaned panel so no extra work is needed for them.
+    absorb_targets <- unique(c(y_name, x_names))
+    panel <- .absorb_apply(panel, absorb_targets, absorb_groups)
+  }
 
   # -- 2b. CS-DL formula augmentation -----------------------------------------
   # For CS-DL, replace the LHS with Delta y and augment the RHS with
@@ -121,12 +154,21 @@ dcce <- function(data, unit_index, time_index, formula,
   }
 
   # -- 3. Build CSAs if requested ---------------------------------------------
+  # Dispatches between the classical global CSAs and spatial (local)
+  # CSAs when a spatial_weights matrix is supplied.
   csa_vars <- NULL
   csa_colnames <- NULL
 
   if (!is.null(cross_section_vars)) {
     csa_vars <- .resolve_cr_vars(cross_section_vars, y_name, x_names, panel)
-    panel <- .build_csa(panel, csa_vars, lags = cross_section_lags)
+    if (!is.null(spatial_weights)) {
+      units_in_panel <- as.character(sort(unique(panel[[unit_var]])))
+      W_valid <- .spatial_validate_W(spatial_weights, units_in_panel)
+      panel <- .build_spatial_csa(panel, csa_vars, W_valid,
+                                  lags = cross_section_lags)
+    } else {
+      panel <- .build_csa(panel, csa_vars, lags = cross_section_lags)
+    }
     csa_colnames <- .get_csa_colnames(panel)
   }
 

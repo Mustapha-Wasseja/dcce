@@ -19,6 +19,8 @@ dcce(
   long_run_vars = NULL,
   long_run_model = NULL,
   csdl_xlags = 3L,
+  absorb = NULL,
+  spatial_weights = NULL,
   fast = TRUE,
   n_cores = 1L,
   run_cd_test = FALSE,
@@ -68,6 +70,27 @@ Default \code{NULL}.}
 
 \item{csdl_xlags}{Integer: number of lags of \eqn{\Delta x} to include as
 short-run controls when \code{model = "csdl"}. Default 3.}
+
+\item{absorb}{Either \code{NULL} (default), a character vector of column
+names, or a one-sided formula like \code{~ industry + region} specifying
+high-dimensional fixed effects to project out of \eqn{y} and
+\eqn{X} before the main unit loop runs. A single factor uses the
+within transformation; multiple factors use the alternating
+projections of Guimaraes & Portugal (2010) / Correia (2016). The
+unit fixed effects used by CCE estimators are still kept via unit
+intercepts; \code{absorb} is for \emph{additional} categorical effects on top
+of the cross-section.}
+
+\item{spatial_weights}{Optional \eqn{N \times N} numeric matrix of
+spatial weights. When supplied, the global cross-sectional averages
+of classical CCE are replaced with \strong{local}, unit-specific
+weighted averages \eqn{\bar y^W_{i,t} = \sum_j w_{ij} y_{j,t}}. The
+matrix must be square with rows and columns matching the unit
+identifiers (row/column names are used for alignment if present);
+it is row-normalised automatically and the diagonal is zeroed. This
+enables spatial CCE estimation that respects the topology of
+cross-sectional dependence (geographical contiguity, trade links,
+etc.).}
 
 \item{fast}{Logical: use the compiled C++ (RcppArmadillo) unit-OLS fast
 path? Default \code{TRUE}. Falls back to pure R automatically if the

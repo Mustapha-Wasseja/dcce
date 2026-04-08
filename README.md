@@ -51,6 +51,15 @@ coefficients, the **adjustment** (speed of return to equilibrium), and
 | Rank condition classifier | De Vos, Everaert & Sarafidis (2024) |
 | Cross-section / wild bootstrap inference | — |
 
+### Extensions
+
+| Tool | Description |
+|------|-------------|
+| **`dcce_rolling()`** | Rolling-window estimation with coefficient path tibble and `plot` method |
+| **`absorb` argument** | High-dimensional fixed-effect absorption via alternating projections |
+| **`spatial_weights` argument** | Spatial CCE with user-supplied weight matrix |
+| **`structural_break_test()`** | Chow / sup-Wald tests, breakdate estimation, sequential Bai-Perron (R port of Stata `xtbreak`) |
+
 ### S3 methods and ergonomics
 
 - `broom`-compatible `tidy()` and `glance()` (tidy includes short-run, adjustment, and long-run rows for LR estimators)
