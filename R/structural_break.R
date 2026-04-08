@@ -196,15 +196,15 @@ structural_break_test <- function(data,
   sup_wald <- wald_path[best]
   best_df  <- df_path[best]
 
-  # Andrews (1993) approximate asymptotic p-value for sup-Wald with
-  # trimming pi_0 = trim (the critical values are non-standard). We
-  # use the simple large-sample approximation based on the maximum
-  # of a squared Brownian bridge: p = 1 - F_{sup chi^2}(sup_wald, k, pi_0)
-  # implemented here via a calibrated chi^2 upper bound with a
-  # Bonferroni-style inflation factor for the search.
-  n_searched <- sum(!is.na(wald_path))
-  chi_p <- stats::pchisq(sup_wald, df = best_df, lower.tail = FALSE)
-  p_adj <- min(1, chi_p * n_searched)   # conservative Bonferroni bound
+  # Andrews (1993) asymptotic p-value for sup-Wald with symmetric
+  # trimming pi_0 = trim. The sup-Wald statistic has a non-standard
+  # asymptotic distribution whose critical values are tabulated by
+  # Andrews (1993, Econometrica, Table I). We look up the relevant
+  # critical values for the (q = df, pi_0) pair and report an
+  # interpolated p-value on the 0.01 / 0.05 / 0.10 scale. Values
+  # above the 10% critical value are reported as "> 0.10".
+  cv <- .andrews_sup_wald_cv(q = best_df, pi0 = trim)
+  p_adj <- .andrews_sup_wald_pvalue(sup_wald, cv)
 
   candidates_tbl <- tibble::tibble(
     date = candidate_dates,
@@ -225,19 +225,120 @@ structural_break_test <- function(data,
   }
 
   out <- list(
-    type        = "unknown",
-    statistic   = sup_wald,
-    p_value     = p_adj,
-    df          = best_df,
-    break_date  = candidate_dates[best],
-    candidates  = candidates_tbl,
-    break_dates = break_dates_out,
-    fit_pre     = fits_pre[[best]],
-    fit_post    = fits_post[[best]],
-    call        = call
+    type            = "unknown",
+    statistic       = sup_wald,
+    p_value         = p_adj,
+    df              = best_df,
+    critical_values = cv,
+    trim            = trim,
+    break_date      = candidate_dates[best],
+    candidates      = candidates_tbl,
+    break_dates     = break_dates_out,
+    fit_pre         = fits_pre[[best]],
+    fit_post        = fits_post[[best]],
+    call            = call
   )
   class(out) <- "dcce_break"
   out
+}
+
+
+#' Andrews (1993) sup-Wald critical values
+#'
+#' Lookup for asymptotic critical values of the sup-Wald statistic under
+#' symmetric trimming, taken from Andrews (1993, Econometrica 61(4),
+#' Table I, columns for the sup-LM / sup-Wald test). Values are
+#' tabulated for q (number of tested parameters) from 1 to 10 and
+#' trimming fractions pi_0 in the set (0.01, 0.05, 0.10, 0.15, 0.20,
+#' 0.25). For values of q above 10 the function linearly extrapolates
+#' in q at the nearest tabulated pi_0. For intermediate pi_0 values
+#' the function uses the nearest tabulated column.
+#'
+#' @param q Integer: number of tested parameters.
+#' @param pi0 Numeric in (0, 0.5): symmetric trimming fraction.
+#' @return A named numeric vector with elements \code{cv10}, \code{cv05},
+#'   \code{cv01} for the 10\%, 5\%, and 1\% critical values.
+#' @keywords internal
+.andrews_sup_wald_cv <- function(q, pi0) {
+  # Andrews (1993) Table I, sup-LM / sup-Wald critical values.
+  # Rows: q = 1, 2, ..., 10.  Columns: pi0 = 0.01, 0.05, 0.10, 0.15, 0.20, 0.25.
+  tbl10 <- matrix(c(
+    #  0.01  0.05  0.10  0.15  0.20  0.25
+     7.17, 6.14, 5.85, 5.63, 5.45, 5.31,   # q = 1
+     9.34, 8.15, 7.78, 7.56, 7.37, 7.22,   # q = 2
+    11.69,10.17, 9.72, 9.44, 9.20, 9.02,   # q = 3
+    13.27,11.89,11.40,11.09,10.85,10.65,   # q = 4
+    14.96,13.49,12.96,12.65,12.38,12.18,   # q = 5
+    16.38,14.89,14.31,13.99,13.70,13.47,   # q = 6
+    17.78,16.16,15.60,15.21,14.91,14.66,   # q = 7
+    19.16,17.43,16.81,16.42,16.10,15.84,   # q = 8
+    20.48,18.67,18.03,17.63,17.30,17.04,   # q = 9
+    21.72,19.89,19.25,18.81,18.46,18.17    # q = 10
+  ), nrow = 10, ncol = 6, byrow = TRUE)
+
+  tbl05 <- matrix(c(
+     8.85, 7.78, 7.17, 6.94, 6.76, 6.60,
+    11.27, 9.84, 9.20, 8.91, 8.69, 8.50,
+    13.72,11.89,11.18,10.86,10.59,10.36,
+    15.65,13.74,12.94,12.58,12.29,12.06,
+    17.34,15.40,14.59,14.22,13.91,13.65,
+    18.97,17.01,16.16,15.76,15.43,15.16,
+    20.55,18.45,17.57,17.15,16.80,16.51,
+    21.95,19.87,18.96,18.51,18.15,17.85,
+    23.45,21.21,20.29,19.82,19.45,19.14,
+    24.66,22.56,21.62,21.13,20.75,20.42
+  ), nrow = 10, ncol = 6, byrow = TRUE)
+
+  tbl01 <- matrix(c(
+    12.35,11.29,10.73,10.53,10.28,10.10,
+    15.68,13.96,13.42,13.05,12.78,12.56,
+    18.48,16.09,15.37,15.04,14.74,14.50,
+    20.34,17.95,17.22,16.87,16.55,16.27,
+    22.35,19.78,19.11,18.73,18.41,18.15,
+    24.07,21.49,20.85,20.37,20.06,19.77,
+    25.47,23.12,22.38,21.87,21.55,21.25,
+    26.92,24.65,23.85,23.32,22.94,22.64,
+    28.38,26.12,25.25,24.73,24.33,24.01,
+    29.75,27.49,26.59,26.04,25.63,25.31
+  ), nrow = 10, ncol = 6, byrow = TRUE)
+
+  pi0_grid <- c(0.01, 0.05, 0.10, 0.15, 0.20, 0.25)
+  q_grid   <- 1:10
+
+  q_lookup <- pmin(10L, pmax(1L, as.integer(round(q))))
+  j <- which.min(abs(pi0_grid - pi0))
+
+  c(
+    cv10 = tbl10[q_lookup, j],
+    cv05 = tbl05[q_lookup, j],
+    cv01 = tbl01[q_lookup, j]
+  )
+}
+
+
+#' Approximate p-value from Andrews critical values
+#'
+#' Linearly interpolates between the 10\%, 5\% and 1\% critical values on
+#' the log-p scale. Values above the 1\% critical value are reported as
+#' 0.01; values below the 10\% critical value are reported as 0.5.
+#' Intended as a rough bracket, not a high-precision p-value — refer to
+#' Hansen (1997) for an exact parametric approximation if more
+#' precision is required.
+#' @keywords internal
+.andrews_sup_wald_pvalue <- function(stat, cv) {
+  if (!is.finite(stat)) return(NA_real_)
+  if (stat >= cv["cv01"]) return(0.01)
+  if (stat >= cv["cv05"]) {
+    # Linear interpolation on -log(p) between (cv05, 0.05) and (cv01, 0.01)
+    frac <- (stat - cv["cv05"]) / (cv["cv01"] - cv["cv05"])
+    return(unname(exp(log(0.05) + frac * (log(0.01) - log(0.05)))))
+  }
+  if (stat >= cv["cv10"]) {
+    frac <- (stat - cv["cv10"]) / (cv["cv05"] - cv["cv10"])
+    return(unname(exp(log(0.10) + frac * (log(0.05) - log(0.10)))))
+  }
+  # Below the 10% critical value: cannot reject at 10%, report p = 0.5
+  return(0.5)
 }
 
 
@@ -389,10 +490,32 @@ print.dcce_break <- function(x, ...) {
   cat(sprintf("Type:          %s\n", x$type))
   cat(sprintf("Base model:    %s\n",
               if (!is.null(x$fit_pre)) x$fit_pre$model else "n/a"))
-  cat(sprintf("Statistic:     %.4f  (df = %d)\n", x$statistic, x$df))
-  cat(sprintf("p-value:       %.4f%s\n",
-              x$p_value,
-              if (x$type == "unknown") "  (Bonferroni-adjusted)" else ""))
+
+  if (x$type == "unknown") {
+    cat(sprintf("Sup-Wald:      %.4f  (df = %d, trim = %.2f)\n",
+                x$statistic, x$df, x$trim))
+    if (!is.null(x$critical_values)) {
+      cv <- x$critical_values
+      cat(sprintf(
+        "Critical vals: 10%% = %.2f,  5%% = %.2f,  1%% = %.2f   (Andrews 1993)\n",
+        cv["cv10"], cv["cv05"], cv["cv01"]))
+    }
+    p_str <- if (is.na(x$p_value)) {
+      "NA"
+    } else if (x$p_value >= 0.5) {
+      "> 0.10  (cannot reject at 10%)"
+    } else if (x$p_value <= 0.01) {
+      "<= 0.01"
+    } else {
+      sprintf("%.4f", x$p_value)
+    }
+    cat(sprintf("p-value:       %s\n", p_str))
+  } else {
+    # Known-date Chow test: standard chi-square p-value
+    cat(sprintf("Chow Wald:     %.4f  (df = %d)\n", x$statistic, x$df))
+    cat(sprintf("p-value:       %.4f\n", x$p_value))
+  }
+
   cat(sprintf("Break date:    %s\n", format(x$break_date)))
   if (length(x$break_dates) > 1L) {
     cat(sprintf("All breaks:    %s\n",

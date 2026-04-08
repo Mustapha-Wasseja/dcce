@@ -2,6 +2,10 @@
 // Silence Armadillo warnings that would otherwise leak through on
 // near-singular XtX matrices; R-level code already handles rank
 // deficiency via a pinv() fallback and logs its own diagnostics.
+// ARMA_DONT_PRINT_ERRORS catches legacy error messages; ARMA_WARN_LEVEL 0
+// disables all runtime warnings (including the solve() "system is
+// singular" messages that reach the R console via Rcpp::Rcerr).
+#define ARMA_WARN_LEVEL 0
 #define ARMA_DONT_PRINT_ERRORS
 #include <RcppArmadillo.h>
 using namespace Rcpp;

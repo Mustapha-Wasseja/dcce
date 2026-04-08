@@ -1,3 +1,44 @@
+# dcce 0.3.2
+
+## Bug fixes
+
+* **`structural_break_test(type = "unknown")` now uses the correct
+  asymptotic distribution for the sup-Wald statistic.** The previous
+  implementation applied a Bonferroni correction over the candidate
+  breakdate grid, which was wildly over-conservative and routinely
+  inflated borderline p-values all the way to 1. The sup-Wald statistic
+  has a non-standard asymptotic distribution (supremum of a squared
+  Brownian bridge) whose critical values were tabulated by Andrews
+  (1993, *Econometrica* 61(4), Table I). `dcce` now ships those
+  critical values as internal data and reports p-values by interpolating
+  on the log-scale between the tabulated 1%, 5%, and 10% levels.
+  Values above the 1% critical value are reported as `p <= 0.01`; below
+  the 10% critical value they are reported as `p > 0.10`.
+* `print.dcce_break()` for unknown-date tests now displays the full
+  set of Andrews critical values next to the sup-Wald statistic, and
+  formats the p-value as a human-readable bracket ("> 0.10", "<= 0.01",
+  or the interpolated value) instead of a bare number. The known-date
+  (Chow) path is unchanged and still uses the standard chi-square
+  p-value.
+* The `dcce_break` object now carries a `critical_values` element (a
+  named vector with `cv10`, `cv05`, `cv01`) and a `trim` element so
+  downstream code and custom print methods can access them.
+* **Silenced Armadillo runtime warnings.** `src/unit_ols.cpp` now
+  defines `ARMA_WARN_LEVEL 0` in addition to `ARMA_DONT_PRINT_ERRORS`,
+  fully suppressing the `solve(): system is singular` messages that
+  used to leak through to the console during `structural_break_test()`
+  and near-rank-deficient CCE fits. The R-level `.unit_ols()` fallback
+  still handles rank deficiency via `pinv()` and continues to log its
+  own `cli_warn` diagnostics where appropriate.
+
+## Internal
+
+* New tests in `test-structural-break.R` covering the Andrews
+  critical-value lookup, p-value interpolation, and a regression
+  test reproducing the v0.3.1 Bonferroni blow-up (sup-Wald = 7.20,
+  q = 3, pi0 = 0.15) to lock in the fix.
+
+
 # dcce 0.3.1
 
 ## Bug fixes / ergonomics

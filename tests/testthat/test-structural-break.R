@@ -77,8 +77,42 @@ test_that("structural_break_test handles a panel with no break cleanly", {
     type = "unknown", trim = 0.2
   )
   expect_s3_class(brk, "dcce_break")
-  # With no true break, Bonferroni-adjusted p should be > 0.05
+  # With no true break, Andrews p-value should be > 0.05
   expect_gt(brk$p_value, 0.05)
+  # Critical values from Andrews (1993) should be attached
+  expect_true(all(c("cv10", "cv05", "cv01") %in% names(brk$critical_values)))
+})
+
+
+test_that(".andrews_sup_wald_cv returns monotonic critical values", {
+  for (q in c(1L, 3L, 5L)) {
+    for (pi0 in c(0.05, 0.15, 0.20)) {
+      cv <- .andrews_sup_wald_cv(q, pi0)
+      expect_true(cv["cv10"] < cv["cv05"])
+      expect_true(cv["cv05"] < cv["cv01"])
+    }
+  }
+})
+
+
+test_that(".andrews_sup_wald_pvalue brackets correctly", {
+  cv <- c(cv10 = 9.44, cv05 = 11.36, cv01 = 15.04)
+  # Below 10% cv -> p = 0.5
+  expect_equal(.andrews_sup_wald_pvalue(5, cv),  0.5)
+  # Between 5% and 10%
+  p_mid <- .andrews_sup_wald_pvalue(10, cv)
+  expect_true(p_mid > 0.05 && p_mid < 0.10)
+  # Above 1% cv -> p = 0.01
+  expect_equal(.andrews_sup_wald_pvalue(20, cv), 0.01)
+})
+
+
+test_that("Andrews p-value fixes the v0.3.1 Bonferroni blow-up", {
+  # Reproduces the user's pwt8 case: sup-Wald = 7.20, q = 3, pi0 = 0.15.
+  # Previously Bonferroni produced p = 1.0; Andrews should report > 0.10.
+  cv <- .andrews_sup_wald_cv(q = 3L, pi0 = 0.15)
+  p  <- .andrews_sup_wald_pvalue(7.2046, cv)
+  expect_equal(p, 0.5)   # below the 10% critical value
 })
 
 
