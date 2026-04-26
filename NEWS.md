@@ -1,3 +1,79 @@
+# dcce 0.4.0
+
+## New estimators
+
+* **Interactive Fixed Effects (IFE)** estimator of Bai (2009), via
+  `model = "ife"` in `dcce()`. Iterates between pooled OLS and
+  principal-component extraction of factors/loadings until convergence.
+  The number of factors can be specified or selected automatically via
+  the BIC3 criterion of Bai & Ng (2002). Unlike CCE, IFE estimates
+  factors and loadings directly rather than proxying them with
+  cross-sectional averages.
+
+* **Pooled CCE (CCEP)** estimator, via `model = "ccep"` in `dcce()`.
+  Constrains slopes to be identical across units (precision-weighted
+  pooled OLS with cross-sectional averages), as proposed by
+  Pesaran (2006) alongside the existing CCE-MG. More efficient than
+  CCE-MG when slopes are truly homogeneous.
+
+## New diagnostics
+
+* **Dumitrescu-Hurlin (2012) panel Granger causality test** via the
+  new exported function `granger_test()`. Reports the W-bar statistic
+  (cross-sectional average of unit Wald statistics), the Z-bar
+  (large-T standardised), and the Z-bar tilde (small-sample adjusted)
+  statistics.
+
+* **IPS and LLC panel unit root tests** via `panel_ur_test()`. Implements
+  Im, Pesaran & Shin (2003) IPS t-bar and Levin, Lin & Chu (2002) LLC
+  common-root tests. These do not correct for CSD (use `cips_test()`
+  for that); they are included as standard benchmarks.
+
+* **Pedroni and Kao panel cointegration tests** via `panel_coint_test()`.
+  Reports the Pedroni (1999, 2004) group-mean t and group-mean rho
+  statistics, or the Kao (1999) ADF statistic.
+
+## New features
+
+* **Impulse response functions** via the new exported function `irf()`.
+  Computes IRFs from fitted dynamic panel models (DCCE, CS-ARDL, PMG)
+  using the MG ARDL lag polynomial. Optional cross-section bootstrap
+  for confidence bands. Includes `print.dcce_irf()` and
+  `plot.dcce_irf()` methods.
+
+* **Half-panel jackknife** bias correction (Chudik & Pesaran 2015) via
+  `bias_correction = "half_panel_jackknife"` in `dcce()`. Splits each
+  unit's time series in half, fits on each half, and corrects the
+  full-sample MG estimate: b_hpj = 2*b_full - 0.5*(b_half1 + b_half2).
+  Targets the Nickell bias in dynamic CCE.
+
+## Infrastructure
+
+* **GitHub Actions CI** added (`.github/workflows/R-CMD-check.yaml`):
+  runs `R CMD check --as-cran` on Ubuntu, Windows, and macOS on every
+  push/PR to `main`.
+* **pkgdown site** configuration added (`_pkgdown.yml`) with grouped
+  reference index.
+* **`cran-comments.md`** added for CRAN submission readiness.
+
+## References
+
+* Bai, J. (2009). Panel data models with interactive fixed effects.
+  *Econometrica*, 77(4), 1229-1279.
+* Dumitrescu, E.-I., & Hurlin, C. (2012). Testing for Granger
+  non-causality in heterogeneous panels. *Economic Modelling*, 29(4),
+  1450-1460.
+* Im, K. S., Pesaran, M. H., & Shin, Y. (2003). Testing for unit
+  roots in heterogeneous panels. *Journal of Econometrics*, 115(1),
+  53-74.
+* Kao, C. (1999). Spurious regression and residual-based tests for
+  cointegration in panel data. *Journal of Econometrics*, 90(1), 1-44.
+* Levin, A., Lin, C.-F., & Chu, C.-S. J. (2002). Unit root tests in
+  panel data. *Journal of Econometrics*, 108(1), 1-24.
+* Pedroni, P. (2004). Panel cointegration. *Econometric Theory*,
+  20(3), 597-625.
+
+
 # dcce 0.3.2
 
 ## Bug fixes

@@ -1,0 +1,50 @@
+url: https://mustapha-wasseja.github.io/dcce/
+
+template:
+  bootstrap: 5
+
+reference:
+  - title: "Estimation"
+    contents:
+      - dcce
+      - dcce_rolling
+      - bootstrap
+      - dcce_bootstrap
+
+  - title: "Cross-Sectional Dependence Tests"
+    contents:
+      - pcd_test
+
+  - title: "Panel Diagnostics"
+    contents:
+      - cips_test
+      - panel_ur_test
+      - cointegration_test
+      - panel_coint_test
+      - swamy_test
+      - hausman_test
+      - granger_test
+      - csd_exp
+      - ic
+      - rank_condition
+      - structural_break_test
+
+  - title: "Workflow"
+    contents:
+      - dcce_workflow
+
+  - title: "Impulse Response"
+    contents:
+      - irf
+
+  - title: "Formula Operators"
+    contents:
+      - L
+      - D
+      - Lrange
+
+  - title: "Data"
+    contents:
+      - pwt8
+      - dcce_sim
+      - dcce_sim_truth

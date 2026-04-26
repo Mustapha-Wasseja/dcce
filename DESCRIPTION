@@ -1,6 +1,6 @@
 Package: dcce
 Title: Dynamic Common Correlated Effects Estimation for Panel Data
-Version: 0.3.2
+Version: 0.4.0
 Authors@R: person("Mustapha", "Wasseja", role = c("aut", "cre"),
            email = "mwasseja@worldbank.org")
 Description: Estimates heterogeneous coefficient models for large panels

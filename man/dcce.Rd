@@ -9,13 +9,13 @@ dcce(
   unit_index,
   time_index,
   formula,
-  model = c("dcce", "cce", "mg", "amg", "rcce", "pmg", "csdl", "csardl"),
+  model = c("dcce", "cce", "ccep", "mg", "amg", "rcce", "ife", "pmg", "csdl", "csardl"),
   cross_section_vars = ~.,
   cross_section_lags = 0L,
   pooled_vars = NULL,
   include_constant = TRUE,
   unit_trend = FALSE,
-  bias_correction = c("none", "jackknife", "recursive"),
+  bias_correction = c("none", "jackknife", "recursive", "half_panel_jackknife"),
   long_run_vars = NULL,
   long_run_model = NULL,
   csdl_xlags = 3L,
@@ -39,8 +39,11 @@ dcce(
 \item{formula}{A formula of the form \code{y ~ x1 + x2}. Supports \code{L()}, \code{D()},
 and \code{Lrange()} operators for lags, differences, and lag ranges.}
 
-\item{model}{Character: estimator to use. One of \code{"dcce"}, \code{"cce"}, \code{"mg"},
-\code{"amg"}, \code{"rcce"}, \code{"pmg"}, \code{"csdl"}, \code{"csardl"}. Default \code{"dcce"}.}
+\item{model}{Character: estimator to use. One of \code{"dcce"}, \code{"cce"},
+\code{"ccep"}, \code{"mg"}, \code{"amg"}, \code{"rcce"}, \code{"ife"}, \code{"pmg"}, \code{"csdl"},
+\code{"csardl"}. Default \code{"dcce"}. \code{"ccep"} is the Pooled CCE of
+Pesaran (2006) which constrains slopes to be identical across units.
+\code{"ife"} is the iterative PC estimator of Bai (2009).}
 
 \item{cross_section_vars}{A one-sided formula specifying variables for
 cross-sectional averages, e.g. \code{~ x1 + x2}. Use \code{~ .} for all RHS
@@ -60,7 +63,10 @@ heterogeneous).}
 \code{FALSE}.}
 
 \item{bias_correction}{Character: bias correction method. One of \code{"none"},
-\code{"jackknife"}, \code{"recursive"}. Default \code{"none"}.}
+\code{"jackknife"}, \code{"recursive"}, \code{"half_panel_jackknife"}. The
+\code{"half_panel_jackknife"} implements the Chudik & Pesaran (2015)
+time-series half-panel jackknife that corrects the Nickell bias in
+dynamic CCE. Default \code{"none"}.}
 
 \item{long_run_vars}{A one-sided formula specifying long-run variables
 (reserved for CSDL/CSARDL models). Default \code{NULL}.}
