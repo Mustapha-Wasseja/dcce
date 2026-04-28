@@ -55,6 +55,7 @@ cross-sectional dependence, and information criteria for CSA lag selection.
 
 ```{r load-package}
 library(dcce)
+library(generics)
 ```
 
 # The Problem: Cross-Sectional Dependence
