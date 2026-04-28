@@ -75,11 +75,28 @@ NULL
     }
   }
 
-  # Use only complete (balanced) rows/cols for the iterative step
-  row_ok <- rowSums(is.na(Y_mat)) == 0 & apply(X_arr, 1, function(r) !any(is.na(r)))
-  col_ok <- colSums(is.na(Y_mat[row_ok, , drop = FALSE])) == 0
-  Y <- Y_mat[row_ok, col_ok, drop = FALSE]
-  X <- X_arr[row_ok, col_ok, , drop = FALSE]
+  # Use only complete (balanced) rows/cols for the iterative step.
+
+  # Step 1: drop time periods (columns) where any unit/variable has NA
+  any_na_col <- rep(FALSE, T_val)
+  for (t_idx in seq_len(T_val)) {
+    if (any(is.na(Y_mat[, t_idx]))) { any_na_col[t_idx] <- TRUE; next }
+    for (k in seq_len(K)) {
+      if (any(is.na(X_arr[, t_idx, k]))) { any_na_col[t_idx] <- TRUE; break }
+    }
+  }
+  col_ok <- !any_na_col
+
+  # Step 2: among remaining columns, drop units (rows) with any NA
+  Y_sub <- Y_mat[, col_ok, drop = FALSE]
+  X_sub <- X_arr[, col_ok, , drop = FALSE]
+  row_ok <- rowSums(is.na(Y_sub)) == 0
+  for (k in seq_len(K)) {
+    row_ok <- row_ok & (rowSums(is.na(X_sub[, , k, drop = FALSE])) == 0)
+  }
+
+  Y <- Y_sub[row_ok, , drop = FALSE]
+  X <- X_sub[row_ok, , , drop = FALSE]
   N_eff <- nrow(Y)
   T_eff <- ncol(Y)
 

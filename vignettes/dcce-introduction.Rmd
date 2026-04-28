@@ -814,6 +814,133 @@ plot(fit_dcce2, which = "coef")
 Each panel corresponds to one regressor; the dashed red line marks the MG mean.
 Use `which = "resid"` for a residual diagnostic plot.
 
+# Additional Estimators (v0.2.0+)
+
+## Augmented Mean Group (AMG)
+
+The **AMG** estimator of @eberhardt2010productivity accounts for CSD by
+extracting a Common Dynamic Process (CDP) from time-dummy coefficients in a
+pooled first-difference regression. The CDP is then added as a nuisance
+regressor in each unit's OLS:
+
+```{r amg}
+fit_amg <- dcce(
+  data = pwt8, unit_index = "country", time_index = "year",
+  formula = d_log_rgdpo ~ log_hc + log_ck + log_ngd,
+  model = "amg", cross_section_vars = NULL
+)
+coef(fit_amg)
+```
+
+## Interactive Fixed Effects (IFE, Bai 2009)
+
+Unlike CCE (which proxies factors via cross-sectional averages), **IFE**
+estimates the factors and loadings directly via iterative principal
+components. It produces **pooled** slope coefficients (not heterogeneous):
+
+```{r ife}
+fit_ife <- dcce(
+  data = pwt8, unit_index = "country", time_index = "year",
+  formula = log_rgdpo ~ log_hc + log_ck + log_ngd,
+  model = "ife", n_factors = 2L
+)
+print(fit_ife)
+```
+
+## Pooled CCE (CCEP)
+
+@pesaran2006estimation proposed two CCE estimators: the Mean Group version
+(CCE-MG, our `model = "cce"`) and the **Pooled** version (CCEP). CCEP
+constrains slopes to be identical across units, gaining efficiency when
+slopes are truly homogeneous:
+
+```{r ccep}
+fit_ccep <- dcce(
+  data = pwt8, unit_index = "country", time_index = "year",
+  formula = d_log_rgdpo ~ log_hc + log_ck + log_ngd,
+  model = "ccep", cross_section_vars = ~ .
+)
+coef(fit_ccep)
+```
+
+# Additional Diagnostics (v0.3.0+)
+
+## Panel Granger causality
+
+The Dumitrescu-Hurlin (2012) test checks whether one variable
+Granger-causes another in a heterogeneous panel:
+
+```{r granger}
+gc <- granger_test(
+  data = pwt8, unit_index = "country", time_index = "year",
+  y = "d_log_rgdpo", x = "log_ck", lags = 1L
+)
+print(gc)
+```
+
+## IPS and LLC panel unit root tests
+
+Standard (non-CSD-robust) benchmarks alongside CIPS:
+
+```{r ips-llc}
+X_lev <- do.call(rbind, by(pwt8, pwt8$country, function(d) d$log_rgdpo))
+X_lev <- X_lev[, colSums(is.na(X_lev)) == 0, drop = FALSE]
+panel_ur_test(X_lev, test = "ips", lags = 1)
+```
+
+## Pedroni cointegration test
+
+```{r pedroni}
+panel_coint_test(
+  data = pwt8, unit_index = "country", time_index = "year",
+  formula = log_rgdpo ~ log_hc + log_ck,
+  test = "pedroni", lags = 1
+)
+```
+
+## Structural break test
+
+The sup-Wald test for an unknown break date with Andrews (1993) critical
+values:
+
+```{r structural-break}
+brk <- structural_break_test(
+  data = pwt8, unit_index = "country", time_index = "year",
+  formula = d_log_rgdpo ~ log_hc + log_ck + log_ngd,
+  model = "mg", cross_section_vars = NULL,
+  type = "unknown", trim = 0.20
+)
+print(brk)
+```
+
+# Impulse Response Functions (v0.4.0)
+
+For dynamic models, `irf()` traces the response of the dependent variable
+to a unit shock in a regressor:
+
+```{r irf-example}
+data(dcce_sim)
+fit_dyn <- dcce(
+  data = dcce_sim, unit_index = "unit", time_index = "time",
+  formula = y ~ L(y, 1) + x,
+  model = "dcce", cross_section_vars = ~ ., cross_section_lags = 3
+)
+ir <- irf(fit_dyn, impulse = "x", horizon = 10, boot_reps = 99, seed = 42)
+print(ir)
+```
+
+# The `dcce_workflow()` Pipeline
+
+A single function runs all recommended pre-estimation diagnostics and
+returns a recommended `dcce()` call:
+
+```{r workflow-demo, eval=FALSE}
+dcce_workflow(
+  data = pwt8, unit_index = "country", time_index = "year",
+  formula = log_rgdpo ~ log_hc + log_ck + log_ngd
+)
+```
+
 # Quick-Start Guide
 
 ```{r quickstart, eval=FALSE}
@@ -845,7 +972,7 @@ tidy(fit_qs)
 glance(fit_qs)
 
 # 5. Bootstrap
-bootstrap(fit_qs, reps = 499)
+dcce_bootstrap(fit_qs, reps = 499)
 ```
 
 # References
