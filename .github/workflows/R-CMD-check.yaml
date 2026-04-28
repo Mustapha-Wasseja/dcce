@@ -37,4 +37,5 @@ jobs:
 
       - uses: r-lib/actions/check-r-package@v2
         with:
-          args: '"--no-build-vignettes", "--as-cran"'
+          args: 'c("--no-build-vignettes", "--as-cran")'
+          build_args: 'c("--no-build-vignettes")'
