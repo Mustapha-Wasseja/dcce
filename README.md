@@ -217,18 +217,26 @@ explicit one-sided formula such as `~ log_rgdpo + log_hc`.
 
 ## References
 
+- Bai, J. (2009). Panel data models with interactive fixed effects. *Econometrica*, 77(4), 1229–1279.
 - Bailey, N., Kapetanios, G., & Pesaran, M. H. (2016). Exponent of cross-sectional dependence: estimation and inference. *Journal of Applied Econometrics*, 31(6), 929–960.
 - Chudik, A., & Pesaran, M. H. (2015). Common correlated effects estimation of heterogeneous dynamic panel data models with weakly exogenous regressors. *Journal of Econometrics*, 188(2), 393–420.
 - Chudik, A., Mohaddes, K., Pesaran, M. H., & Raissi, M. (2016). Long-run effects in large heterogeneous panel data models with cross-sectionally correlated errors. In *Essays in Honor of Aman Ullah*, 36, 85–135.
-- De Vos, I., Everaert, G., & Sarafidis, V. (2024). Rank condition for the CCE estimator with heterogeneous slopes. *Journal of Econometrics*, 240(2), 105703.
+- De Vos, I., Everaert, G., & Sarafidis, V. (2024). A method to evaluate the rank condition for CCE estimators. *Econometric Reviews*, 43(2–4).
 - Ditzen, J. (2018). Estimating dynamic common-correlated effects in Stata. *The Stata Journal*, 18(3), 585–617.
+- Dumitrescu, E.-I., & Hurlin, C. (2012). Testing for Granger non-causality in heterogeneous panels. *Economic Modelling*, 29(4), 1450–1460.
+- Eberhardt, M., & Teal, F. (2010). Productivity analysis in global manufacturing production. *Economics Series Working Papers 515*, University of Oxford.
 - Fan, J., Liao, Y., & Yao, J. (2015). Power enhancement in high-dimensional cross-sectional tests. *Econometrica*, 83(4), 1497–1541.
-- Juodis, A., & Reese, S. (2022). A randomized CD test for error cross-sectional dependence in panel data models with possibly many regressors. *Journal of Business & Economic Statistics*, 40(4), 1500–1514.
-- Margaritella, L., & Westerlund, J. (2023). Information criteria for factor model selection in panel data. *Econometric Reviews*, 42(7), 619–641.
+- Im, K. S., Pesaran, M. H., & Shin, Y. (2003). Testing for unit roots in heterogeneous panels. *Journal of Econometrics*, 115(1), 53–74.
+- Juodis, A., & Reese, S. (2022). The incidental parameters problem in testing for remaining cross-section correlation. *Journal of Business & Economic Statistics*, 40(3), 1191–1203.
+- Kao, C. (1999). Spurious regression and residual-based tests for cointegration in panel data. *Journal of Econometrics*, 90(1), 1–44.
+- Margaritella, L., & Westerlund, J. (2023). Using information criteria to select averages in CCE. *The Econometrics Journal*, 26(3), 405–421.
+- Pedroni, P. (2004). Panel cointegration: asymptotic and finite sample properties of pooled time series tests. *Econometric Theory*, 20(3), 597–625.
 - Pesaran, M. H. (2006). Estimation and inference in large heterogeneous panels with a multifactor error structure. *Econometrica*, 74(4), 967–1012.
+- Pesaran, M. H. (2007). A simple panel unit root test in the presence of cross-section dependence. *Journal of Applied Econometrics*, 22(2), 265–312.
 - Pesaran, M. H. (2015). Testing weak cross-sectional dependence in large panels. *Econometric Reviews*, 34(6–10), 1089–1117.
 - Pesaran, M. H., & Smith, R. (1995). Estimating long-run relationships from dynamic heterogeneous panels. *Journal of Econometrics*, 68(1), 79–113.
 - Shin, Y., Pesaran, M. H., & Smith, R. (1999). An autoregressive distributed-lag modelling approach to cointegration analysis. In *Econometrics and Economic Theory in the 20th Century*, 371–413.
+- Westerlund, J. (2007). Testing for error correction in panel data. *Oxford Bulletin of Economics and Statistics*, 69(6), 709–748.
 
 ## License
 
