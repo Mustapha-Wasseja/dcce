@@ -20,6 +20,7 @@ This function is evaluated during formula processing by \code{dcce()} and should
 not be called directly on raw vectors outside of a dcce formula context.
 }
 \examples{
-# Inside a dcce() formula:
-# dcce(data, "id", "t", y ~ L(x, 1) + L(x, 2), model = "mg")
+x <- c(10, 20, 30, 40, 50)
+L(x, 1)   # NA 10 20 30 40
+L(x, 2)   # NA NA 10 20 30
 }

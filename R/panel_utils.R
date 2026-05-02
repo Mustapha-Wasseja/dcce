@@ -233,8 +233,9 @@ NULL
 #' @return A numeric vector of the same length as `x` with leading `NA`s.
 #' @export
 #' @examples
-#' # Inside a dcce() formula:
-#' # dcce(data, "id", "t", y ~ L(x, 1) + L(x, 2), model = "mg")
+#' x <- c(10, 20, 30, 40, 50)
+#' L(x, 1)   # NA 10 20 30 40
+#' L(x, 2)   # NA NA 10 20 30
 L <- function(x, k = 1L) {
   k <- as.integer(k)
   n <- length(x)
@@ -260,8 +261,9 @@ L <- function(x, k = 1L) {
 #' @return A numeric vector of the same length as `x` with leading `NA`s.
 #' @export
 #' @examples
-#' # Inside a dcce() formula:
-#' # dcce(data, "id", "t", D(y) ~ D(x), model = "mg")
+#' x <- c(10, 20, 30, 40, 50)
+#' D(x, 1)   # NA 10 10 10 10
+#' D(x, 2)   # NA NA 20 20 20
 D <- function(x, k = 1L) {
   k <- as.integer(k)
   n <- length(x)
@@ -282,8 +284,8 @@ D <- function(x, k = 1L) {
 #' @return A matrix with columns `L[k0]` through `L[k1]`.
 #' @export
 #' @examples
-#' # Inside a dcce() formula:
-#' # dcce(data, "id", "t", y ~ Lrange(x, 0, 3), model = "mg")
+#' x <- c(10, 20, 30, 40, 50)
+#' Lrange(x, 0, 2)   # 3 columns: lag 0, lag 1, lag 2
 Lrange <- function(x, k0, k1) {
   if (k0 > k1) {
     cli::cli_abort("{.arg k0} must be <= {.arg k1}.")

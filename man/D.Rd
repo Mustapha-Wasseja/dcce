@@ -18,6 +18,7 @@ A numeric vector of the same length as \code{x} with leading \code{NA}s.
 Creates a differenced version of a variable for use inside \code{dcce()} formulas.
 }
 \examples{
-# Inside a dcce() formula:
-# dcce(data, "id", "t", D(y) ~ D(x), model = "mg")
+x <- c(10, 20, 30, 40, 50)
+D(x, 1)   # NA 10 10 10 10
+D(x, 2)   # NA NA 20 20 20
 }

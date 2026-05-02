@@ -21,6 +21,6 @@ Creates multiple lagged versions of a variable from lag \code{k0} to lag \code{k
 Useful for distributed lag specifications.
 }
 \examples{
-# Inside a dcce() formula:
-# dcce(data, "id", "t", y ~ Lrange(x, 0, 3), model = "mg")
+x <- c(10, 20, 30, 40, 50)
+Lrange(x, 0, 2)   # 3 columns: lag 0, lag 1, lag 2
 }
